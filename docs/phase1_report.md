@@ -1,6 +1,6 @@
 # Phase 1 report: model, tests and sweeps
 
-2026-11-19, second pass the same day after Chris's review. Code at `model/regatta_model/`, sweeps in `tools/sweeps.py`, runs listed in `docs/run_log.md`.
+2026-11-19, with a second and a third pass the same day after Chris's reviews. Code at `model/regatta_model/`, sweeps in `tools/sweeps.py`, runs listed in `docs/run_log.md`.
 
 ## Summary
 
@@ -16,6 +16,34 @@ Two points of the brief hold once the stroke is larger (candidate A: alpha0 = 65
 5. **A half-beat shift tacks the boat in 2 beats** when the new pattern starts from a press, 4 from a release.
 
 Point 3 is the one that matters for the game: with one field axis and a locked boat, the course is a straight line. The second pass tested the two steering ideas Chris chose, and neither gives usable steering near candidate A (next section).
+
+## Third pass: rotating field
+
+Chris asked to try a rotating field after the explanation of why phase cannot steer in an oscillating one. It works: **in a rotating field the press phase is the heading**, degree for degree, from every start.
+
+The model gained one parameter, `field_ellipticity` e: the field is B (sin(omega t) along the axis + e cos(omega t) across it). e = 0 is the brief's field and leaves every earlier result unchanged; e = 1 is a field of constant strength turning at omega (two coil pairs in quadrature).
+
+**Theory.** For a stiff tiller the beat-averaged torque is −mu B (2/pi) sin(pi D) sin(i_h alpha0) sin(Theta + psi_c): one stable heading, Theta = −psi_c, and no Kapitza torque. Timing now enters through the angle of the effective field, where in the oscillating field it entered only through its strength. Checked symbolically by the same two-position argument and numerically (two tests).
+
+**The field can carry the boat round.** At the earlier field strengths (omega/omega0 ≤ 1.5 with hull damping 0.7 /s) the boat spins with the field at one turn per beat, with or without rhythm. The spin is gone, and the lock holds from every start and every phase, at omega/omega0 ≥ 2.
+
+**Candidate R** (`toy/params/candidate_r_rotating.toml`): e = 1, omega/omega0 = 2, alpha0 = 65°, hull damping 3 /s (raised from 0.7 to damp the slow heading motion, whose period is 2.8 beats).
+
+| Measurement | Candidate R |
+|---|---|
+| Headings held, of 36 bins of 10°, D = 0.5 alone | 36, each from all 8 starts |
+| Phase step of 30° / 90° / 180° | boat turns 30° / 90° / 180°, settled in 2 / 2 / 3 beats |
+| Half-beat shift (the tack sweep) | 3 beats |
+| Heading scatter at 20 / 40 / 80 / 120 ms jitter | 4° / 9° / 17° / 23° rms |
+| Tempo off by 0.5 to 4 % | boat turns steadily at 3.6° per beat per %, 95 to 98 % of the asked turn |
+| Duty cycle, D from 0.25 to 0.75 | moves the heading by 19° (−92° to −111°); locks at every D |
+| Idle boat (button released or held) | turns steadily at 13° per beat in the field's sense; exponent 0.00 /s |
+
+- With the brief's hull damping of 0.7 /s the same steering works but slowly: 4 to 6 beats for a 30° step, 9 to 12 for 90° and 180°, and at omega/omega0 = 2 jitter of 80 ms throws the boat into the spin.
+- Settled headings sit 7° beyond the theory at D = 0.5 (−98.5° against −91.5°). The likely cause is the mean torque of the turning field on the damped wobble, as in an induction motor: a rigid-boat estimate gives 5° under lock and 9° per beat for the idle drift (measured 13°). Not derived for the compliant tiller.
+- Between omega/omega0 = 1.5 and 2 with damping 3 /s, sloppy timing (120 ms) throws the boat into the spin; at 2 and above it only widens the scatter.
+
+**What changes for the game.** The skill is continuous: heading error follows timing error (9° at 40 ms), and there is no lock to lose. Shifting the beat by a fraction turns the boat by the same fraction of a turn, so a half-beat shift is still a 180° turn. Playing slightly fast or slow makes the boat turn steadily. There is no chaos and no tumbling: the idle boat circles slowly (radius about 6.5 length units at v = 1.5).
 
 ## Second pass: chaos, phase steering, heavier magnet
 
@@ -112,13 +140,14 @@ Candidates: A = `toy/params/candidate_a_strong_stroke.toml` (omega/omega0 = 1.1,
 
 The model is the two-body system of the brief, integrated by RK4 at dt = 1/480 s, with inertias normalised by I_m + I_h = 1. `dynamics.simulate` splits steps at the exact event times and is the reference for the golden files of Phase 3. `dynamics.run_beats` is the ensemble integrator of the sweeps; it rounds press and release times to the grid (error up to 1 ms).
 
-All 13 tests pass (`.venv/bin/pytest`):
+All 15 tests pass (`.venv/bin/pytest`):
 
 - Tests 1, 2, 4 and 5 of the brief, as written.
 - Test 3 of the brief at D = 0.5, where both heading formulas agree.
 - Test 3b, added: at D = 0.3 the heading is within 2° of phi − 90° − i_m × (mean alpha) and more than 8° from the brief's formula.
 - Stiff-tiller rectification against its closed form; Mathieu threshold 1.484 for a nearly rigid, undamped boat.
 - Heading clustering, transient length and off-tempo presses (helpers of the second pass).
+- Rotating field: heading equal to minus the press phase, and the stiff-tiller closed form.
 
 The closed forms were also checked symbolically with sympy (run once through `uv run --with sympy`, not added as a dependency).
 
@@ -252,9 +281,9 @@ My recommendation is candidate A for the feel of the lock and the tack, with the
 
 ## Decisions needed
 
-1. **Steering.** Both options tested fail near A. Does the game take the changing field axis (course shape set by the coils, duty cycle as trim), or move to the stable regime for phase steering? "Duty cycle steers" in Decisions needs rewording either way; I have not changed it.
-2. **Hull damping.** 0.7 /s gives 8 beats of tumbling before the spin; 0.3 to 0.4 /s gives 12 to 16 and keeps the lock. Sustained chaos needs near-zero damping, where nothing locks. The pitch line "tames the chaos" and the Decisions entry "with a still tiller the boat tumbles" fit a transient, not an attractor.
-3. **Parameter set**: A is recorded as chosen. Proposed adjustment: hull damping 0.4 /s, to be confirmed by playing in Phase 2.
+1. **Field.** Rotating field (candidate R) or oscillating field (candidate A)? R gives real steering by phase and loses the tumble; A keeps the lock, the two tacks and a transient tumble, and needs the field axis to change along the course to make turns. I recommend R. It contradicts three Decisions entries, which I have not changed: "the pond's oscillating field is fixed (axis phi per pond) ... with a still tiller the boat tumbles", "duty cycle steers", and "losing the tempo returns the boat to chaos".
+2. **Hull damping for R**: 3 /s proposed (0.7 /s in the brief).
+3. **The pitch.** With R it becomes "your rhythm is the tiller: shift the beat to turn". "Tames the chaos" would go.
 
 ## Limits of these results
 
@@ -262,6 +291,7 @@ My recommendation is candidate A for the feel of the lock and the tack, with the
 - In `lock_window.csv` the locked headings are averaged per side of the field axis. Where the grip is below 1 there are two mirror headings on the same side, and their average reads as ±90°. This affects candidates B and C near the edges of their phase bands, not the tables above. `steer_static.csv` (second pass) lists every branch separately.
 - The jitter sweep starts on the tack; recovery after a lost lock is not measured.
 - Linear hull drag only; no soft stops; one tiller (omega_s = 4 omega, zeta = 0.5) and one inertia ratio throughout.
+- Candidate R: one stroke and one damping swept in full; the hull's wobble within a beat (what the player sees) is not measured; the rotating-field runs at hull damping 0.7 and 1.5 /s used temporary parameter files, and the idle drift and its estimate come from a scratch script.
 - Run from scratch scripts, not from `tools/sweeps.py`: the stable-regime theory check, the hull-damping scan on A, and the phase-steering details (drifting phase, step response, jitter scatter), each for one start or 16 seeds.
 - The heavier-magnet runs at omega/omega0 = 1.3 and 1.5 used temporary parameter files; copies are in their run directories.
 - At strong field (omega/omega0 = 0.4 to 0.6), where chaos survives the game's damping, a quick scan found locks at some phases (default tiller at 0.4 with alpha0 ≥ 45°; stiff tiller at 0.4 to 0.6). Jitter, tack and steering were not measured there.
