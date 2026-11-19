@@ -16,6 +16,7 @@ Working title "Magnet Regatta" (not cleared, see Open questions). This file is t
 - CURRENT: Phase 1
 - 2026-11-17: brief written; nothing built yet.
 - 2026-11-19: Phase 0 done: public repo celoy/regatta, layout, .venv (Python 3.12, uv), pytest smoke test passing, empty Godot 4.7.2 project exported to web (no threads) and loaded in headless Chrome. Awaiting Chris's go for Phase 1.
+- 2026-11-19: Phase 1 built: model, tests 1-5 (10 pass), sweeps 1-5 plus a design scan, report in docs/phase1_report.md. Findings: defaults give no lock; still tiller spins with the field (not chaotic); duty cycle does not steer (two opposite headings only). Awaiting Chris's review, the steering decision and the parameter set for Phase 2.
 
 ## Deadline and jam
 
