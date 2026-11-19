@@ -42,7 +42,8 @@ def lyapunov(
     rng = np.random.default_rng(seed)
     spb = p.steps_per_beat
     s = np.array(s0, dtype=float)
-    s, _ = advance(p, s, 0, n_transient * spb, button)
+    if n_transient:
+        s, _ = advance(p, s, 0, n_transient * spb, button)
     e = rng.standard_normal(s.shape)
     e /= np.linalg.norm(e, axis=0)
     pair = np.stack([s, s + d0 * e], axis=1)  # (4, 2, ...)
@@ -76,3 +77,37 @@ def floquet_aligned(p: Params, eps: float = 1e-6) -> np.ndarray:
         s = rk4_step(p, n * p.dt, s, 0.0, p.dt)
     mono = (s[:, 0::2] - s[:, 1::2]) / (2.0 * eps)
     return np.max(np.abs(np.linalg.eigvals(mono)))
+
+
+def transient_beats(h: np.ndarray, tol: float = 0.05) -> np.ndarray:
+    """Beats before the motion becomes regular, from beat-averaged headings h (n_beats, ...).
+
+    Regular means that the heading change per beat repeats with period one or two beats
+    (aligned or locked state, steady spin, period-2 wobble) within `tol` rad, from that
+    beat to the end of the run. Returns n_beats - 3 if this never happens.
+    """
+    dh = np.diff(h, axis=0)
+    irregular = np.abs(dh[2:] - dh[:-2]) >= tol
+    n = irregular.shape[0]
+    last = np.where(irregular.any(axis=0), n - 1 - np.argmax(irregular[::-1], axis=0), -1)
+    return last + 1
+
+
+def cluster_angles(x: np.ndarray, tol: float) -> list[tuple[float, int]]:
+    """Group angles (rad) lying within `tol` of their neighbours on the circle.
+
+    Returns (circular mean, count) per group, largest group first.
+    """
+    x = np.sort(np.mod(np.asarray(x, dtype=float), 2.0 * np.pi))
+    if x.size == 0:
+        return []
+    gaps = np.diff(np.concatenate([x, [x[0] + 2.0 * np.pi]]))
+    cuts = np.nonzero(gaps > tol)[0]
+    if cuts.size == 0:
+        groups = [x]
+    else:
+        rolled = np.roll(x, -(cuts[-1] + 1))  # start just after a gap
+        sizes = np.diff(np.concatenate([[cuts[-1] - x.size], cuts]))
+        groups = np.split(rolled, np.cumsum(sizes)[:-1])
+    out = [(float(np.angle(np.mean(np.exp(1j * g)))), int(g.size)) for g in groups if g.size]
+    return sorted(out, key=lambda c: -c[1])

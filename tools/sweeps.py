@@ -368,6 +368,227 @@ def sweep_design(p0: Params, out: Out, rng: np.random.Generator) -> None:
             out.say(f"  {ratio:3.1f} [{lam[i]:+5.2f}]  " + " ".join(f"{x:5.2f}" for x in res[k][i]))
 
 
+def sweep_chaos(p0: Params, out: Out, rng: np.random.Generator) -> None:
+    out.say("== 7. Still tiller: chaos against dissipation")
+    ratios = np.round(np.arange(0.4, 1.51, 0.1), 2)
+    gammas = np.array([0.0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.4, 0.7])
+    zetas = np.array([0.0, 0.05, 0.5])
+    tillers = np.array([p0.omega_s / p0.omega, 20.0])
+    n_ic, n_trans = 12, 300
+    w, z, g, r, h0 = np.meshgrid(
+        tillers, zetas, gammas, ratios, rng.uniform(-np.pi, np.pi, n_ic), indexing="ij"
+    )
+    p = p0.with_(
+        omega_s=p0.omega * w.ravel(),
+        zeta=z.ravel(),
+        gamma_hat=g.ravel(),
+        omega0=p0.omega / r.ravel(),
+    )
+    s0 = dyn.rest_state(p, h0.ravel())
+    lam = an.lyapunov(p, s0, 150, 450).reshape(w.shape)
+    _, _, hull = dyn.run_beats(p, s0, n_trans)
+    trans = an.transient_beats(hull).reshape(w.shape)
+    chaotic = lam > CHAOS_MIN
+    rows = []
+    for a, tiller in enumerate(tillers):
+        for b, zeta in enumerate(zetas):
+            out.say(
+                f"-- tiller omega_s = {tiller:.0f} omega, zeta = {zeta}: chaotic starts in "
+                f"tenths (9: at least 0.9). Rows gamma_hat; columns omega/omega0 = "
+                f"{ratios[0]} to {ratios[-1]}"
+            )
+            for c, gamma in enumerate(gammas):
+                out.say(
+                    f"  {gamma:5.2f}  "
+                    + "".join(str(min(9, int(10 * x))) for x in chaotic[a, b, c].mean(-1))
+                )
+                for d, ratio in enumerate(ratios):
+                    cell = lam[a, b, c, d]
+                    rows.append(
+                        [
+                            float(tiller),
+                            float(zeta),
+                            float(gamma),
+                            float(ratio),
+                            float(cell.max()),
+                            float(np.median(cell)),
+                            float(chaotic[a, b, c, d].mean()),
+                            float(np.median(trans[a, b, c, d])),
+                            float(trans[a, b, c, d].max()),
+                        ]
+                    )
+    out.csv(
+        "chaos_dissipation.csv",
+        [
+            "omega_s_over_omega",
+            "zeta",
+            "gamma_hat",
+            "omega_over_omega0",
+            "lyap_max",
+            "lyap_median",
+            "chaotic_frac",
+            "transient_beats_median",
+            "transient_beats_max",
+        ],
+        rows,
+    )
+    out.say(
+        f"-- beats before the motion is regular (median / max over starts; {n_trans - 3}: "
+        "never), given tiller, zeta = 0.5"
+    )
+    for c, gamma in enumerate(gammas):
+        out.say(
+            f"  {gamma:5.2f}  "
+            + " ".join(
+                f"{np.median(trans[0, 2, c, d]):3.0f}/{trans[0, 2, c, d].max():3.0f}"
+                for d in range(len(ratios))
+            )
+        )
+
+
+def sweep_steer(p0: Params, out: Out, rng: np.random.Generator) -> None:
+    out.say("== 8. Phase steering: settled headings against press phase and duty cycle")
+    ratios = np.array([p0.omega / p0.omega0, 1.35, 1.5])
+    alphas = np.array([15, 25, 35, 45, 55, 65])
+    duties = np.round(np.arange(0.2, 0.81, 0.1), 1)
+    phases = np.arange(0, 360, 10) * DEG
+    n_ic, n_beats = 8, 160
+    r, a, d, ph, h0 = np.meshgrid(
+        ratios, alphas * DEG, duties, phases, rng.uniform(-np.pi, np.pi, n_ic), indexing="ij"
+    )
+    p = p0.with_(omega0=p0.omega / r.ravel(), alpha0=a.ravel())
+    button = dyn.periodic_button(press_time(p0, d.ravel(), ph.ravel()), d.ravel(), p0.period)
+    _, _, hull = dyn.run_beats(p, dyn.rest_state(p, h0.ravel()), n_beats, button)
+    locked = (an.window_spread(hull[-LOCK_WINDOW:], LOCK_WINDOW)[0] < LOCK_TOL).reshape(r.shape)
+    head = th.wrap(hull[-LOCK_WINDOW:].mean(axis=0) - p0.phi).reshape(r.shape)
+    rows = []
+    bins = np.zeros((len(ratios), len(alphas), len(duties), 36), dtype=bool)
+    for i, ratio in enumerate(ratios):
+        for j, alpha in enumerate(alphas):
+            q = p0.with_(omega0=p0.omega / ratio, alpha0=alpha * DEG)
+            for k, duty in enumerate(duties):
+                for m, phase in enumerate(phases):
+                    sel = locked[i, j, k, m]
+                    grip = th.grip(q, float(duty), float(phase))
+                    for centre, count in an.cluster_angles(head[i, j, k, m][sel], 8 * DEG):
+                        c = float(th.wrap(centre))
+                        if count >= n_ic // 2:
+                            bins[i, j, k, int(np.floor(np.mod(c, 2 * np.pi) / (10 * DEG))) % 36] = (
+                                True
+                            )
+                        pred = th.wrap(th.hull_headings(q, float(duty), float(phase)) - q.phi)
+                        err = float(np.min(np.abs(th.wrap(pred - c)))) if pred.size else np.nan
+                        rows.append(
+                            [
+                                float(ratio),
+                                float(alpha),
+                                float(duty),
+                                float(phase / DEG),
+                                grip,
+                                c / DEG,
+                                count / n_ic,
+                                err / DEG,
+                            ]
+                        )
+                    if not sel.any():
+                        rows.append(
+                            [
+                                float(ratio),
+                                float(alpha),
+                                float(duty),
+                                float(phase / DEG),
+                                grip,
+                                np.nan,
+                                0.0,
+                                np.nan,
+                            ]
+                        )
+    out.csv(
+        "steer_static.csv",
+        [
+            "omega_over_omega0",
+            "alpha0_deg",
+            "duty",
+            "centre_phase_deg",
+            "grip",
+            "heading_deg",
+            "share_of_starts",
+            "theory_error_deg",
+        ],
+        rows,
+    )
+    out.say("heading coverage: number of 10 deg heading bins (of 36) held by at least half of the")
+    out.say("starts at some phase; first with D = 0.5 only, then with any D from 0.2 to 0.8;")
+    out.say(
+        "then the mean lock fraction. Rows omega/omega0; columns alpha0 = "
+        + ", ".join(str(x) for x in alphas)
+        + " deg"
+    )
+    k5 = int(np.argmin(np.abs(duties - 0.5)))
+    any_d = bins.any(axis=2)
+    for i, ratio in enumerate(ratios):
+        out.say(
+            f"  {ratio:4.2f}  "
+            + "  ".join(
+                f"{bins[i, j, k5].sum():2d}/{any_d[i, j].sum():2d}/{locked[i, j].mean():.2f}"
+                for j in range(len(alphas))
+            )
+        )
+
+    out.say("-- phase ramp: locked at nominal phase, then the press tempo is off by a fixed")
+    out.say("amount, so the press phase drifts by 360 deg x offset per beat (D = 0.5)")
+    offsets = np.array([0.0025, 0.005, 0.01])
+    n_start, n_pre = 4, 30
+    r, a, e, _ = np.meshgrid(ratios, alphas * DEG, offsets, np.arange(n_start), indexing="ij")
+    p = p0.with_(omega0=p0.omega / r.ravel(), alpha0=a.ravel())
+    period = p0.period * (1.0 + e.ravel())
+    n_ramp = int(1.25 / offsets.min())
+    t0 = press_time(p0, 0.5, th.nominal_centre_phase(p0))
+    t_sw = n_pre * p0.period + t0
+    nominal = dyn.periodic_button(t0, 0.5, p0.period)
+
+    def ramp(t: float) -> np.ndarray:
+        late = (np.mod(t - t_sw, period) < 0.5 * period).astype(float)
+        return late if t >= t_sw else nominal(t)
+
+    h_start = tack_target(p, 0.5) + 0.05 * rng.standard_normal(r.size)
+    _, _, hull = dyn.run_beats(p, dyn.rest_state(p, h_start), n_pre + n_ramp, ramp)
+    hull = (hull[n_pre:] - p0.phi).reshape((n_ramp,) + r.shape)
+    rows = []
+    out.say("per cell: beats followed (heading change below 10 deg per beat) as a fraction of one")
+    out.say("full drift of the phase, and 10 deg heading bins visited while following (of 36)")
+    for kk, off in enumerate(offsets):
+        n_cycle = int(round(1.0 / off))
+        out.say(f"  tempo offset {100 * off:.2f} % ({n_cycle} beats per turn of the phase)")
+        for i, ratio in enumerate(ratios):
+            cells = []
+            for j, alpha in enumerate(alphas):
+                h = hull[:n_cycle, i, j, kk]
+                smooth = np.abs(np.diff(h, axis=0)) < 10 * DEG
+                follow = float(smooth.mean())
+                visited = np.zeros((36, n_start), dtype=bool)
+                idx = (np.floor(np.mod(h[1:], 2 * np.pi) / (10 * DEG)).astype(int)) % 36
+                for s_i in range(n_start):
+                    visited[idx[smooth[:, s_i], s_i], s_i] = True
+                cover = float(visited.sum(axis=0).mean())
+                net = float(np.mean(h[-1] - h[0]) / (2 * np.pi))
+                rows.append([float(ratio), float(alpha), float(100 * off), follow, cover, net])
+                cells.append(f"{follow:.2f}/{cover:4.1f}")
+            out.say(f"    {ratio:4.2f}  " + "  ".join(cells))
+    out.csv(
+        "steer_ramp.csv",
+        [
+            "omega_over_omega0",
+            "alpha0_deg",
+            "tempo_offset_pct",
+            "followed_frac",
+            "heading_bins_visited",
+            "net_turns",
+        ],
+        rows,
+    )
+
+
 SWEEPS: dict[str, Callable[[Params, Out, np.random.Generator], None]] = {
     "regime": sweep_regime,
     "lock": sweep_lock,
@@ -375,6 +596,8 @@ SWEEPS: dict[str, Callable[[Params, Out, np.random.Generator], None]] = {
     "tack": sweep_tack,
     "reaction": sweep_reaction,
     "design": sweep_design,
+    "chaos": sweep_chaos,
+    "steer": sweep_steer,
 }
 
 
@@ -382,7 +605,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--params", type=Path, required=True)
     ap.add_argument(
-        "--only", default=",".join(SWEEPS), help="comma-separated: " + ", ".join(SWEEPS)
+        "--only", default=",".join(list(SWEEPS)[:6]), help="comma-separated: " + ", ".join(SWEEPS)
     )
     ap.add_argument("--seed", type=int, default=20261119)
     ap.add_argument("--why", default="", help="one line for docs/run_log.md")
