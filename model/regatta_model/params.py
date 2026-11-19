@@ -77,10 +77,27 @@ class Params:
         return replace(self, **changes)
 
 
-def load_params(path: str | Path) -> Params:
-    """Read a parameter file in the format of toy/params/default.toml."""
+def read_param_dict(path: str | Path) -> dict[str, Any]:
+    """Raw parameter dictionary from a TOML file (keys as in toy/params/default.toml)."""
     with open(path, "rb") as f:
-        d = tomllib.load(f)
+        return tomllib.load(f)
+
+
+def load_params(path: str | Path, overrides: dict[str, Any] | None = None) -> Params:
+    """Read a parameter file in the format of toy/params/default.toml.
+
+    `overrides` replaces entries of the file by key (for example a boat's handling
+    parameters from boats/*.json); unknown keys are an error.
+    """
+    d = read_param_dict(path)
+    for key, value in (overrides or {}).items():
+        if key not in d:
+            raise KeyError(f"unknown parameter {key!r}")
+        d[key] = value
+    return params_from_dict(d)
+
+
+def params_from_dict(d: dict[str, Any]) -> Params:
     omega = 2.0 * np.pi * d["field_hz"]
     return Params(
         omega=omega,

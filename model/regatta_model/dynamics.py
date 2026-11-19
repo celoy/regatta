@@ -137,20 +137,7 @@ def simulate(
     dt = p.dt
     # Augmented state: (theta_m, theta_m', theta_h, theta_h', x, y).
     z = np.concatenate([np.asarray(s0, dtype=float), np.asarray(pos0, dtype=float)])
-
-    def f(t: float, z: np.ndarray, u: float) -> np.ndarray:
-        d = np.empty(6)
-        d[:4] = rhs(p, t, z[:4], u)
-        d[4] = p.v * np.cos(z[2])
-        d[5] = p.v * np.sin(z[2])
-        return d
-
-    def step(t: float, z: np.ndarray, u: float, h: float) -> np.ndarray:
-        k1 = f(t, z, u)
-        k2 = f(t + 0.5 * h, z + 0.5 * h * k1, u)
-        k3 = f(t + 0.5 * h, z + 0.5 * h * k2, u)
-        k4 = f(t + h, z + h * k3, u)
-        return z + (h / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+    step = lambda t, z, u, h: boat_step(p, t, z, u, h)  # noqa: E731
 
     ts, zs = [0.0], [z.copy()]
     u, ie = 0.0, 0
@@ -169,6 +156,26 @@ def simulate(
             zs.append(z.copy())
     out = np.array(zs)
     return {"t": np.array(ts), "state": out[:, :4], "pos": out[:, 4:]}
+
+
+def boat_rhs(p: Params, t: float, z: np.ndarray, u: float, speed: float) -> np.ndarray:
+    """Augmented state z = (theta_m, theta_m', theta_h, theta_h', x, y) of one boat."""
+    d = np.empty(6)
+    d[:4] = rhs(p, t, z[:4], u)
+    d[4] = speed * p.v * np.cos(z[2])
+    d[5] = speed * p.v * np.sin(z[2])
+    return d
+
+
+def boat_step(
+    p: Params, t: float, z: np.ndarray, u: float, h: float, speed: float = 1.0
+) -> np.ndarray:
+    """One RK4 step of size h for the augmented state; button state and speed held."""
+    k1 = boat_rhs(p, t, z, u, speed)
+    k2 = boat_rhs(p, t + 0.5 * h, z + 0.5 * h * k1, u, speed)
+    k3 = boat_rhs(p, t + 0.5 * h, z + 0.5 * h * k2, u, speed)
+    k4 = boat_rhs(p, t + h, z + h * k3, u, speed)
+    return z + (h / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
 
 def periodic_button(t_press: float | np.ndarray, duty: float | np.ndarray, period: float) -> Button:

@@ -111,3 +111,21 @@ def cluster_angles(x: np.ndarray, tol: float) -> list[tuple[float, int]]:
         groups = np.split(rolled, np.cumsum(sizes)[:-1])
     out = [(float(np.angle(np.mean(np.exp(1j * g)))), int(g.size)) for g in groups if g.size]
     return sorted(out, key=lambda c: -c[1])
+
+
+def heading_offset(p: Params, duty: float = 0.5, n_beats: int = 60) -> float:
+    """Measured h0 in: settled hull heading = h0 - psi_c, rotating field (ellipticity 1).
+
+    psi_c is the field phase at the centre of the hold. The rotating field makes the boat
+    invariant under a rotation combined with a time shift, so one run at psi_c = 0 gives
+    h0 for every phase. Checked against other phases in the tests.
+    """
+    if p.ellipticity != 1.0:
+        raise ValueError("heading_offset needs a rotating field (ellipticity 1)")
+    from .dynamics import periodic_button, rest_state, run_beats
+
+    t_press = np.mod(-0.5 * duty * p.period, p.period)
+    _, _, hull = run_beats(p, rest_state(p, 0.0), n_beats, periodic_button(t_press, duty, p.period))
+    if np.ptp(hull[-5:]) > 0.02:
+        raise RuntimeError("no steady heading for the calibration run")
+    return float(np.angle(np.exp(1j * hull[-5:].mean())))
