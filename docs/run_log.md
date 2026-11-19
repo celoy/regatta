@@ -1,1 +1,3 @@
 - 20261119-182119 `d836c5ea` `tools/sweeps.py --params toy/params/default.toml --why all sweeps on the brief's default parameters` -> `runs/phase1/20261119-182119_default` all sweeps on the brief's default parameters
+- 20261119-182726 `97c2df86` `tools/sweeps.py --params toy/params/candidate_a_strong_stroke.toml --only lock,jitter,tack --why candidate A from the design scan` -> `runs/phase1/20261119-182726_candidate_a_strong_stroke` candidate A from the design scan
+- 20261119-182728 `97c2df86` `tools/sweeps.py --params toy/params/candidate_b_kapitza.toml --only lock,jitter,tack --why candidate B, the brief's fallback regime` -> `runs/phase1/20261119-182728_candidate_b_kapitza` candidate B, the brief's fallback regime
