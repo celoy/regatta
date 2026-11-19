@@ -11,5 +11,6 @@ zeta = 0.0                   # low-damping test: undamped tiller
 v = 1.5                      # boat speed, length units / s
 steps_per_second = 480       # dt = 1 / steps_per_second
 phi_deg = 0.0                # field axis
+field_ellipticity = 0.0      # 0: oscillating field along the axis; +-1: rotating field
 stop_ratio = 1.3             # soft stops at +- stop_ratio * alpha0
 stop_stiffness_ratio = 0.0   # stop stiffness / k; 0 switches the stops off

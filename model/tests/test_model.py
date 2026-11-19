@@ -143,3 +143,26 @@ def test_button_with_off_tempo_period_drifts_in_phase(p0: Params) -> None:
     assert np.array_equal(button(10 * p0.period + 0.05), [1.0, 0.0])  # second one is 0.1 s late
     assert np.array_equal(button(10 * p0.period + 0.15), [1.0, 1.0])
     assert np.array_equal(button(10 * p0.period + 0.55), [0.0, 1.0])
+
+
+def test_rotating_field_heading_follows_the_press_phase(p0: Params) -> None:
+    """e = 1, omega = 2.5 omega0: the hull settles at phi - psi_c - delta for any press phase.
+
+    (At the default omega = 1.2 omega0 the rotating field carries the boat round instead.)
+    """
+    p = p0.with_(ellipticity=1.0, phi=0.3, omega0=p0.omega / 2.5)
+    _, delta = th.transfer(p)
+    for psi_c in (0.5, 2.0, 4.0):
+        h = settled(p, 0.5, psi_c, np.array([-2.0, 1.0]))
+        assert np.all(np.abs(th.wrap(h - (p.phi - psi_c - delta))) < 5 * DEG)
+        assert np.all(np.abs(th.wrap(h - th.hull_headings(p, 0.5, psi_c))) < 5 * DEG)
+
+
+def test_rotating_field_stiff_tiller_closed_form(p0: Params) -> None:
+    p = p0.with_(ellipticity=1.0, omega_s=400.0 * p0.omega)
+    for duty, psi in ((0.5, 1.2), (0.3, 0.7)):
+        c, s = th.rectified(p, duty, psi)
+        amp = (2 / np.pi) * np.sin(np.pi * duty) * np.sin(p.i_h * p.alpha0)
+        # -(C sin + S cos)(Theta) = -amp sin(Theta + psi)
+        assert c == pytest.approx(amp * np.cos(psi), abs=2e-3)
+        assert s == pytest.approx(amp * np.sin(psi), abs=2e-3)

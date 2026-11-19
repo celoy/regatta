@@ -668,6 +668,104 @@ def sweep_magnet(p0: Params, out: Out, rng: np.random.Generator) -> None:
     )
 
 
+def sweep_response(p0: Params, out: Out, rng: np.random.Generator) -> None:
+    out.say("== 10. Phase as a tiller: step response, jitter scatter and phase ramp (D = 0.5)")
+    ratios = np.array([1.5, 2.0, 2.5, 3.0])
+    alphas = np.array([35.0, 50.0, 65.0])
+    period, psi = p0.period, th.nominal_centre_phase(p0)
+    t0 = press_time(p0, 0.5, psi)
+    n_pre = 40
+
+    def members(*extra: np.ndarray) -> tuple[Params, list[np.ndarray], tuple[int, ...]]:
+        grids = np.meshgrid(ratios, alphas * DEG, *extra, indexing="ij")
+        q = p0.with_(omega0=p0.omega / grids[0].ravel(), alpha0=grids[1].ravel())
+        return q, [g.ravel() for g in grids[2:]], grids[0].shape
+
+    def start(q: Params, n: int) -> np.ndarray:
+        return dyn.rest_state(q, tack_target(q, 0.5) + np.zeros(n))
+
+    nominal = dyn.periodic_button(t0, 0.5, period)
+    t_sw = n_pre * period + t0
+
+    # Step of the press phase.
+    steps = np.array([30.0, 90.0, 180.0])
+    q, (dpsi,), shape = members(steps * DEG)
+    shifted = dyn.periodic_button(t0 + dpsi / p0.omega, 0.5, period)
+    n_post = 80
+    _, _, hull = dyn.run_beats(
+        q, start(q, dpsi.size), n_pre + n_post, lambda t: nominal(t) if t < t_sw else shifted(t)
+    )
+    before = hull[n_pre - 5 : n_pre].mean(axis=0)
+    final = hull[-5:].mean(axis=0)
+    off = np.abs(hull[n_pre:] - final) > 5 * DEG
+    settle = np.where(off.any(axis=0), n_post - np.argmax(off[::-1], axis=0), 0).reshape(shape)
+    turned = ((final - before) / DEG).reshape(shape)
+    steady = (an.window_spread(hull[-LOCK_WINDOW:], LOCK_WINDOW)[0] < LOCK_TOL).reshape(shape)
+
+    # Jitter on a locked boat.
+    sigmas = np.array([0.02, 0.04, 0.08, 0.12])
+    n_seed, n_beats = 8, 200
+    q, (sg, _), shape_j = members(sigmas, np.arange(n_seed))
+    base = np.arange(n_pre + n_beats)[:, None] * period + t0
+    noise = rng.standard_normal((2, n_pre + n_beats, sg.size)) * sg
+    noise[:, :n_pre] = 0.0
+    button = dyn.timeline_button(base + noise[0], base + 0.5 * period + noise[1], period)
+    _, _, hull = dyn.run_beats(q, start(q, sg.size), n_pre + n_beats, button)
+    dev = (hull[n_pre:] - hull[n_pre - 5 : n_pre].mean(axis=0)).reshape((n_beats,) + shape_j)
+    scatter = np.sqrt((dev**2).mean(axis=(0, -1))) / DEG
+    worst = np.abs(dev).max(axis=(0, -1)) / DEG
+
+    # Phase ramp: press tempo off by a fixed fraction.
+    offsets = np.array([0.005, 0.01, 0.02, 0.04])
+    n_ramp = 100
+    q, (off_t,), shape_r = members(offsets)
+    per = period * (1.0 + off_t)
+
+    def ramp(t: float) -> np.ndarray:
+        return (np.mod(t - t_sw, per) < 0.5 * per).astype(float) if t >= t_sw else nominal(t)
+
+    _, _, hull = dyn.run_beats(q, start(q, off_t.size), n_pre + n_ramp, ramp)
+    # the press comes later each beat, so the phase grows and the heading should fall
+    expected = -360.0 * off_t * (n_ramp - 1)
+    follow = (((hull[-1] - hull[n_pre]) / DEG) / expected).reshape(shape_r)
+
+    rows = []
+    out.say("per cell: beats to settle after a phase step of 30 / 90 / 180 deg (x: not settled);")
+    out.say("heading scatter (rms, deg) at 20 / 40 / 80 / 120 ms jitter; turn achieved over turn")
+    out.say("asked for a tempo offset of 0.5 / 1 / 2 / 4 % (3.6 deg per beat per %)")
+    for i, ratio in enumerate(ratios):
+        for j, alpha in enumerate(alphas):
+            qq = p0.with_(omega0=p0.omega / ratio, alpha0=alpha * DEG)
+            c, s = th.rectified(qq, 0.5, psi)
+            slow = float(qq.omega0 * np.sqrt(np.hypot(c, s)))  # slow frequency of the lock, rad/s
+            st = [f"{settle[i, j, k]:.0f}" if steady[i, j, k] else "x" for k in range(len(steps))]
+            out.say(
+                f"  omega/omega0 {ratio:3.1f}, alpha0 {alpha:2.0f}: slow period "
+                f"{2 * np.pi / slow / period:4.1f} beats; step {' / '.join(st)}; turned "
+                + " / ".join(f"{x:+.0f}" for x in turned[i, j])
+                + "; scatter "
+                + " / ".join(f"{x:.0f}" for x in scatter[i, j])
+                + "; ramp "
+                + " / ".join(f"{x:.2f}" for x in follow[i, j])
+            )
+            rows.append(
+                [float(ratio), float(alpha), 2 * np.pi / slow / period]
+                + [float(x) for x in settle[i, j]]
+                + [float(x) for x in turned[i, j]]
+                + [float(x) for x in scatter[i, j]]
+                + [float(x) for x in worst[i, j]]
+                + [float(x) for x in follow[i, j]]
+            )
+    cols = ["omega_over_omega0", "alpha0_deg", "slow_period_beats"]
+    cols += [f"settle_beats_step{int(x)}" for x in steps] + [
+        f"turned_deg_step{int(x)}" for x in steps
+    ]
+    cols += [f"scatter_deg_{int(1000 * x)}ms" for x in sigmas]
+    cols += [f"max_dev_deg_{int(1000 * x)}ms" for x in sigmas]
+    cols += [f"ramp_follow_{100 * x:g}pct" for x in offsets]
+    out.csv("phase_response.csv", cols, rows)
+
+
 SWEEPS: dict[str, Callable[[Params, Out, np.random.Generator], None]] = {
     "regime": sweep_regime,
     "lock": sweep_lock,
@@ -678,6 +776,7 @@ SWEEPS: dict[str, Callable[[Params, Out, np.random.Generator], None]] = {
     "chaos": sweep_chaos,
     "steer": sweep_steer,
     "magnet": sweep_magnet,
+    "response": sweep_response,
 }
 
 

@@ -29,6 +29,7 @@ class Params:
     v: float  # boat speed
     dt: float  # time step, s
     phi: Real  # field axis, rad
+    ellipticity: float  # quadrature field across the axis over the field along it
     stop_ratio: float  # soft stops at +- stop_ratio * alpha0
     stop_k_ratio: float  # stop stiffness / k (0: no stops)
 
@@ -92,6 +93,7 @@ def load_params(path: str | Path) -> Params:
         v=d["v"],
         dt=1.0 / d["steps_per_second"],
         phi=np.deg2rad(d["phi_deg"]),
+        ellipticity=d["field_ellipticity"],
         stop_ratio=d["stop_ratio"],
         stop_k_ratio=d["stop_stiffness_ratio"],
     )

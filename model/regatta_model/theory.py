@@ -49,6 +49,21 @@ Slow equation:
     Theta'' + gamma_hat Theta' = -omega0^2 (C sin Theta + S cos Theta)
                                  - kappa (omega0^4 / (4 omega^2)) sin(2 Theta).
 
+Elliptical field. With B (sin(omega t) e_phi + e cos(omega t) e_perp) the field torque is
+mu B (-sin(omega t) sin + e cos(omega t) cos)(theta_m - phi). Its beat average keeps the
+form -mu B (C sin Theta + S cos Theta) with
+
+    C -> C + e < cos(omega t) sin(i_h alpha) >,  S -> S - e < cos(omega t) cos(i_h alpha) >,
+
+and the Kapitza torque is multiplied by (1 - e^2). For a rotating field (e = 1) and a stiff
+tiller the average is exactly
+
+    -mu B (2 / pi) sin(pi D) sin(i_h alpha0) sin(Theta + psi_c),
+
+with no Kapitza torque: one stable state, Theta = -psi_c. The press phase sets the heading,
+one degree of heading per degree of phase, and the duty cycle only sets the grip. The
+tiller's lag delta adds to psi_c. The mean hull heading is phi - psi_c - delta - i_m alpha_mean.
+
 With the grip g = 2 (omega / omega0)^2 R / kappa (rectification over Kapitza) and C = 0:
 |g| >= 1 gives one stable state, perpendicular to the axis; |g| < 1 gives two,
 sin(Theta) = -g sign(S), mirror images about the perpendicular.
@@ -107,19 +122,32 @@ def rectified(p: Params, duty: float, centre_phase: float) -> tuple[float, float
     """Coefficients (C, S) of the beat-averaged field torque -mu B (C sin + S cos)(Theta)."""
     wt, alpha = stroke(p, duty, centre_phase)
     beta = p.i_h * alpha
-    return float(np.mean(np.sin(wt) * np.cos(beta))), float(np.mean(np.sin(wt) * np.sin(beta)))
+    c = np.mean(np.sin(wt) * np.cos(beta))
+    s = np.mean(np.sin(wt) * np.sin(beta))
+    c += p.ellipticity * np.mean(np.cos(wt) * np.sin(beta))
+    s -= p.ellipticity * np.mean(np.cos(wt) * np.cos(beta))
+    return float(c), float(s)
 
 
 def kapitza_factor(p: Params) -> Real:
-    """kappa: Kapitza torque of the compliant boat over that of the rigid boat."""
+    """kappa: Kapitza torque over that of the rigid boat in an oscillating field.
+
+    Tiller compliance times (1 - e^2) for a field of ellipticity e: zero for a rotating field.
+    """
     d = p.omega_s**2 - p.omega**2
-    return 1.0 - (p.i_h / p.i_m) * p.omega**2 * d / (d**2 + (2 * p.zeta * p.omega_s * p.omega) ** 2)
+    compliance = 1.0 - (p.i_h / p.i_m) * p.omega**2 * d / (
+        d**2 + (2 * p.zeta * p.omega_s * p.omega) ** 2
+    )
+    return compliance * (1.0 - p.ellipticity**2)
 
 
 def grip(p: Params, duty: float, centre_phase: float) -> float:
     """g = 2 (omega / omega0)^2 R / kappa; |g| >= 1 gives the perpendicular lock."""
     c, s = rectified(p, duty, centre_phase)
-    return float(2.0 * (p.omega / p.omega0) ** 2 * np.hypot(c, s) / kapitza_factor(p))
+    kappa = kapitza_factor(p)
+    if kappa <= 0.0:
+        return float("inf")
+    return float(2.0 * (p.omega / p.omega0) ** 2 * np.hypot(c, s) / kappa)
 
 
 def slow_torque(p: Params, theta: Real, c: float, s: float) -> Real:

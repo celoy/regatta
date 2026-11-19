@@ -7,6 +7,12 @@ ensemble. With alpha = theta_m - theta_h and I_m + I_h = 1:
     I_h theta_h'' = +tau - gamma theta_h'
     tau = k (alpha - alpha0 (2u - 1)) + c alpha' + stop torque
 
+Field: B (sin(omega t) e_phi + e cos(omega t) e_perp), with e_phi along the field axis,
+e_perp at +90 deg from it and e the ellipticity. e = 0 is the oscillating field of the
+brief and the equations above; e = +-1 is a field of constant strength rotating at omega
+(clockwise for e = 1). The field torque on the magnet is then
+mu B (-sin(omega t) sin(theta_m - phi) + e cos(omega t) cos(theta_m - phi)).
+
 u = 1 while the button is held, 0 otherwise: the spring rests at -alpha0 and the
 held equilibrium is +alpha0 (alpha_r = -alpha0, tau_b = 2 k alpha0). Written this
 way the press and release responses are mirror images (alpha -> -alpha, u -> 1 - u),
@@ -44,6 +50,8 @@ def rhs(p: Params, t: float, s: np.ndarray, u: float | np.ndarray) -> np.ndarray
             np.maximum(alpha - lim, 0.0) + np.minimum(alpha + lim, 0.0)
         )
     field = -p.mu_b * np.sin(p.omega * t) * np.sin(th_m - p.phi)
+    if p.ellipticity != 0.0:
+        field = field + p.ellipticity * p.mu_b * np.cos(p.omega * t) * np.cos(th_m - p.phi)
     out = np.empty(s.shape)
     out[0] = w_m
     out[1] = (field - tau) / p.i_m
