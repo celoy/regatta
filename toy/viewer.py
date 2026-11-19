@@ -551,7 +551,7 @@ def main() -> None:
         if args.frames and frame >= args.frames:
             running = False
         if not args.fixed_fps:
-            clock.tick(POLL_HZ)
+            clock.tick_busy_loop(POLL_HZ)
     if args.screenshot:
         viewer.draw(screen)
         viewer.screenshot(args.screenshot)
