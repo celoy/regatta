@@ -13,7 +13,7 @@ Working title "Magnet Regatta" (not cleared, see Open questions). This file is t
 
 ## Status
 
-- CURRENT: Phase 1
+- CURRENT: Phase 2
 - 2026-11-17: brief written; nothing built yet.
 - 2026-11-19: Phase 0 done: public repo celoy/regatta, layout, .venv (Python 3.12, uv), pytest smoke test passing, empty Godot 4.7.2 project exported to web (no threads) and loaded in headless Chrome. Awaiting Chris's go for Phase 1.
 - 2026-11-19: Phase 1 built: model, tests 1-5 (10 pass), sweeps 1-5 plus a design scan, report in docs/phase1_report.md. Findings: defaults give no lock; still tiller spins with the field (not chaotic); duty cycle does not steer (two opposite headings only). Awaiting Chris's review, the steering decision and the parameter set for Phase 2.
@@ -29,36 +29,35 @@ Working title "Magnet Regatta" (not cleared, see Open questions). This file is t
 
 ## The game in one page
 
-Pitch. Race a toy pop-pop boat across a pond whose coils make an oscillating magnetic field. The boat's heading is set by its own magnet: left alone, it tumbles chaotically. One button works a magnetic tiller; pressed in rhythm with the field, it tames the chaos and steers the boat. Miss the rhythm and chaos returns.
+Pitch. Race a toy pop-pop boat across a pond whose coils make a magnetic field that turns once per beat. The boat's heading is set by its own magnet. One button works a magnetic tiller; pressed in rhythm with the field, it locks the boat onto a heading, and the moment you press picks the heading. Shift the beat to turn. Left alone, the boat drifts round in slow circles.
 
 Setting. A nineteenth-century physics cabinet: a basin with coils on its banks, tin boats with candle engines, buoys. A uniform field exerts a torque and no force, so the field only orients the boat; the engine pushes it at constant speed. Period hook for the itch page: a 1900 US patent describes a game of racing model boats steered by magnets (US658197).
 
 The control. The magnet is joined to the hull by a torsional spring (the magnetic tiller). Holding the button applies a constant torque that swings the magnet to one side; releasing it lets the spring swing it back. One button, nothing else.
 
-What the rhythm does (derived, small-amplitude theory; the toy measures the real behaviour):
-- Swinging the magnet at the field frequency rectifies the alternating torque into a steady one: the boat settles perpendicular to the field axis, at heading phi ± 90° minus the mean tiller angle.
-- Phase picks the tack: pressing half a beat later puts the boat on the opposite heading. A half-beat shift is a 180° turn. This is the theme.
-- Duty cycle steers: holding longer than releasing moves the mean tiller angle and the heading with it.
-- Steering hard costs grip: the stroke's useful amplitude goes as sin(pi D), so extreme duty cycles weaken the lock until chaos returns.
-- No-go zone: headings within about α0 of the field axis are unreachable, so courses along the axis force you to tack, as in sailing.
-- Losing the tempo: the rectified torque fades or reverses and the boat tumbles.
+What the rhythm does (measured in Phase 1, docs/phase1_report.md, candidate R):
+- Swinging the magnet at the field frequency rectifies the turning field's torque into a steady one, like a static field pointing where the field pointed at the middle of your hold. The boat settles on that heading (plus a fixed offset).
+- Phase is the tiller: pressing a fraction of a beat later turns the boat by the same fraction of a turn. A 90° turn settles in about 2 beats; a half-beat shift is a 180° turn in about 3 beats. This is the theme.
+- Tempo turns: playing steadily fast or slow makes the boat turn steadily (3.6° per beat for each per cent of tempo error).
+- Duty cycle trims: holding longer moves the heading by about 20° over D = 0.25 to 0.75, and the lock holds at every duty cycle.
+- Timing error becomes heading error: 4° rms at 20 ms of jitter, 9° at 40 ms, 23° at 120 ms. There is no lock to lose; sloppy timing makes the boat wander.
+- Left alone (button held or released), the boat circles slowly, at about 13° per beat.
 
 The race. Real time. Pass the gates (pairs of buoys) in order, avoid banks and obstacles, finish. Pause is allowed (simulation and race clock stop) and resumes after a one-beat count-in.
 
-Making the theme readable: a beat indicator showing the field's oscillation against the tiller's stroke; a tutorial that names the move ("shift half a beat to tack"); one sentence on the itch page.
+Making the theme readable: a beat indicator showing the turning field against the tiller's stroke, and an aim dial whose hand points where a press made now would send the boat; a tutorial that names the move ("shift the beat to turn"); one sentence on the itch page.
 
 Scoring. Time to finish; medals against a par time (gold, silver, bronze at 1.00, 1.15, 1.30 × par; guesses); ghost of your best run; a collision stops the boat for 1 s.
 
 Boats as content. Boats differ by tiller spring, magnet strength and inertia, and handle differently. Default first boat: stiff tiller (crisp). Later: a heavy-magnet boat whose hull zigzags; a resonant tiller that must be pumped like a swing.
 
-Fun hypothesis (falsifiable in Phases 1–2):
-- With the chosen parameters, the boat with a still tiller is chaotic (positive largest Lyapunov exponent).
-- A bot pressing with Gaussian timing jitter of 40 ms keeps the lock on at least 95 % of beats on a straight course; at 120 ms it loses lock often. So there is a skill gradient within human range.
-- A half-beat shift completes a tack within 3 beats.
-- Lock rate falls as |D − 0.5| grows, so steering really costs grip.
-- A naive bot is at least 15 % slower than the tuned bot on the campaign courses.
+Fun hypothesis (falsifiable in Phase 2; rewritten for the rotating field):
+- A bot pressing with Gaussian timing jitter of 40 ms holds its heading within 10° rms on a straight course; at 120 ms the scatter exceeds 20°. So there is a skill gradient within human range.
+- A half-beat shift completes a 180° turn within 3 beats.
+- The pilot bot with 120 ms of jitter is at least 15 % slower than with 20 ms on the test courses, so timing skill shows in the race time.
+- A naive bot (aims straight at each gate, uncalibrated, no lead) is at least 15 % slower than the pilot bot on the campaign courses.
 
-Kill criterion and fallback, at Gate B (Sunday 22 November): if no parameter set gives both a chaotic still-tiller boat and a lock that survives 30 ms jitter with the available stroke, move the pond frequency into the stable (Kapitza) regime, where losing the rhythm makes the boat drift or flip rather than tumble, and keep everything else.
+Kill criterion and fallback, at Gate B (Sunday 22 November): if steering by phase does not feel playable when Chris plays the toy (too twitchy, too sluggish, or the aim dial makes it trivial), first adjust omega/omega0, damping and stroke within the range measured in Phase 1; failing that, fall back to candidate A (oscillating field, two tacks per field axis) with the field axis changing along the course.
 
 Out of scope for the jam: opponents racing at the same time (ghosts only), wind and currents, boat speed control, course editor, online leaderboards, touch controls, voice, 3D.
 
@@ -66,11 +65,11 @@ Out of scope for the jam: opponents racing at the same time (ghosts only), wind 
 
 Units: seconds, radians, arbitrary length unit (pond about 20 × 12 units). Fixed time step, deterministic: the same input timeline gives the same run.
 
-Field: B(t) = B sin(omega t) (cos phi, sin phi). phi is the field axis, fixed per pond (optional slow drift phi(t) for "wind shift" ponds).
+Field: B(t) = B (sin(omega t) e_phi + e cos(omega t) e_perp), with e_phi = (cos phi, sin phi), e_perp at +90° from it, and ellipticity e. The game uses e = 1, a field of constant strength turning clockwise at omega; e = 0 is the oscillating field of the original brief, kept for the Phase 1 tests. phi sets which press timing gives which heading, fixed per pond (optional slow drift phi(t) for "wind shift" ponds).
 
 Two rigid bodies, magnet angle theta_m (inertia I_m) and hull heading theta_h (inertia I_h, including the added mass of water in yaw), relative angle alpha = theta_m − theta_h:
 
-    I_m theta_m'' = −mu B sin(omega t) sin(theta_m − phi) − k (alpha − alpha_r) − c alpha' + tau_b u(t)
+    I_m theta_m'' = mu B (−sin(omega t) sin(theta_m − phi) + e cos(omega t) cos(theta_m − phi)) − k (alpha − alpha_r) − c alpha' + tau_b u(t)
     I_h theta_h'' = + k (alpha − alpha_r) + c alpha' − tau_b u(t) − gamma theta_h'
 
 - u(t) = 1 while the button is held, 0 otherwise.
@@ -82,13 +81,14 @@ Two rigid bodies, magnet angle theta_m (inertia I_m) and hull heading theta_h (i
 Derived results to check numerically (state them in docstrings):
 - Tiller natural frequency omega_s = sqrt(k (I_m + I_h) / (I_m I_h)), damping ratio zeta from c.
 - The stroke is the button signal filtered by H(i omega) = omega_s² / (omega_s² − omega² + 2 i zeta omega_s omega). Its component at the field frequency has amplitude (tau_b/k)(2/pi) sin(pi D) |H(i omega)|; its mean is alpha_r + (tau_b/k) D.
-- Small-amplitude rectification: the averaged torque is equivalent to a static field perpendicular to phi, proportional to the stroke amplitude times cos(phase), giving settled headings phi ± 90° − mean alpha. Large strokes bring Bessel-type corrections; measure them.
+- Oscillating field (e = 0): the averaged torque is equivalent to a static field perpendicular to phi, of strength set by the press phase and duty cycle; the settled headings are phi ± 90° − i_m mean alpha (corrected in Phase 1; i_m = I_m / (I_m + I_h)), so phase only picks between two opposite headings.
+- Rotating field (e = 1), stiff tiller: the averaged torque is −mu B (2/pi) sin(pi D) sin(i_h alpha0) sin(Theta + psi_c), so the heading is −psi_c plus a constant: the press phase sets the heading. Measured offset of about 7° from this formula (induction-motor torque on the wobble, not derived).
 - Still tiller, rigid: a pendulum with zero-mean parametric forcing. Its aligned state is stable only for omega > about 1.48 omega0 with omega0² = mu B / (I_m + I_h) (undamped Mathieu boundary, recalled). Below that it tumbles, possibly chaotically.
 - Internal torques cannot change total angular momentum; with drag only on the hull, a periodic stroke without field gives no net rotation. Mirror-image press and release responses keep this true for nonlinear drag. Test it.
 
 Integration: RK4 at dt = 1/480 s for (theta_m, theta_m', theta_h, theta_h'). Resolve both the field period and the tiller period with at least 40 steps each.
 
-Default parameters (all guesses; params in TOML for the toy, JSON for Godot):
+Default parameters (the original guesses, kept in toy/params/default.toml for the Phase 1 tests; params in TOML for the toy, JSON for Godot). The game uses candidate R (toy/params/candidate_r_rotating.toml): e = 1, omega0 = omega / 2, gamma / (I_m + I_h) = 3.0 1/s, alpha0 = 65°, the rest as below.
 
 | Name | Default | Note |
 |---|---|---|
@@ -113,13 +113,13 @@ Sweeps (headless, CSV outputs), Phase 1:
 4. Tack: a half-beat shift from a locked state; beats until relocked on the opposite heading.
 5. Reaction check: field off, periodic presses; net hull rotation over 100 beats (should be zero).
 
-Toy viewer, Phase 2: top view of the pond, coils on the banks, field axis drawn as a double-headed arrow pulsing with sin(omega t), boat with the magnet visible on its pivot, wake trail, gates. Beat indicator: field phase and tiller stroke on one strip. Lock meter (heading spread over the last beat). Keys: Space (the button), P pause, R restart, G ghost, S screenshot, L reload parameters, 1–3 test courses, B cycle boats.
+Toy viewer, Phase 2: top view of the pond, two coil pairs on the banks pulsing in quadrature, the field drawn as an arrow turning once per beat, boat with the magnet visible on its pivot, wake trail, gates. Beat indicator: field phase and tiller stroke on one strip, and the aim dial. Lock meter (heading spread over the last beat). Keys: Space (the button), P pause, R restart, G ghost, S screenshot, L reload parameters, 1–3 test courses, B cycle boats.
 
 Bots (tools/bots.py), Phase 2:
 - Rhythm bot: presses at the field frequency with chosen phase and duty cycle; Gaussian timing jitter sigma.
-- Pilot bot: picks the tack (phase) from the bearing to the next gate and sets the duty cycle by PD on the heading error; tacks when the gate lies in the no-go zone.
-- Naive bot: fixed phase, duty cycle from the bearing only.
-- Outputs: lap times, lock rate, number of tacks, collisions; summary table for the fun hypothesis. Par time = best pilot bot at sigma = 20 ms.
+- Pilot bot: sets the press phase from the bearing to the next gate through the measured heading-phase relation (calibrated once per boat), with a proportional lead on the heading error; duty cycle 0.5.
+- Naive bot: sets the press phase from the bearing through the uncalibrated formula, without lead.
+- Outputs: lap times, on-course rate (beats within 15° of the commanded heading), heading scatter, collisions; summary table for the fun hypothesis. Par time = best pilot bot at sigma = 20 ms.
 
 Tests (pytest):
 1. Field off, tiller oscillator alone: free oscillation at omega_s with damping zeta (within 5 %).
@@ -146,7 +146,7 @@ Course file (courses/Cxx.json):
 }
 ```
 
-Campaign of 6–8 hand-made courses, one idea each: keep the rhythm on a straight; steer with the duty cycle; tack with a half-beat shift; slalom; a passage close to the no-go zone; a pond whose field axis drifts (wind shift); then mixed. Boats in boats/*.json with the handling parameters.
+Campaign of 6–8 hand-made courses, one idea each: keep the rhythm on a straight; turn by shifting the beat; a U-turn with a half-beat shift; slalom; a narrow channel where heading scatter matters; a pond whose field phase drifts (wind shift); then mixed. Boats in boats/*.json with the handling parameters.
 
 ## Godot game
 
@@ -218,9 +218,10 @@ Cut list, in this order: field-drift ponds; resonant boat; best-run ghost; Audio
 - Godot Wild Jam #99 dropped (no AI-written code); entry for GitHub Game Off 2026, theme SHIFT.
 - Sand-frame and phase-space ideas dropped; a boat race steered through a driven nonlinear oscillator chosen.
 - Rhythm game in real time; skill over strategy accepted.
-- The pond's oscillating field is fixed (axis phi per pond); the boat's heading comes from its own magnet; with a still tiller the boat tumbles.
+- The pond's field rotates at the beat frequency (two coil pairs in quadrature; phi per pond); the boat's heading comes from its own magnet; with a still tiller the boat circles slowly. (Changed 2026-11-19 after Phase 1: the oscillating field with a tumbling idle boat was dropped because the press phase cannot set the heading in it.)
 - One button. The magnetic tiller is a torsional spring between magnet and hull; holding the button applies a constant torque to one side, the spring returns it on release.
-- Phase picks the tack (a half-beat shift turns the boat 180°), duty cycle steers, hard steering costs grip, and losing the tempo returns the boat to chaos.
+- The press phase sets the heading, degree for degree (a half-beat shift turns the boat 180°); the duty cycle only trims; timing error becomes heading error; playing off tempo makes the boat turn steadily. (Changed 2026-11-19 after Phase 1; replaces "phase picks the tack, duty cycle steers, losing the tempo returns the boat to chaos".)
+- Parameter set: candidate R (toy/params/candidate_r_rotating.toml: rotating field, omega/omega0 = 2, alpha0 = 65°, hull damping 3 /s). Chosen 2026-11-19.
 - One boat on the water at a time; constant boat speed; the field orients and never pushes.
 - Boats differ by tiller spring, magnet and inertia; the first boat is stiff and crisp (default, open to change).
 - Python twin first (model, tests, sweeps, bots), then GDScript port checked against golden files.
@@ -231,7 +232,7 @@ Cut list, in this order: field-drift ponds; resonant boat; best-run ghost; Audio
 - Licence for the public repo. Answered 2026-11-19: MIT.
 - Confirm the jam's rule on AI-assisted code before submitting.
 - Godot version installed. Answered 2026-11-19: 4.7.2 stable, with web export templates.
-- Parameter regime (omega/omega0, damping, stroke) from the Phase 1 sweeps. Answered 2026-11-19: candidate A (omega/omega0 = 1.1, alpha0 = 65°, toy/params/candidate_a_strong_stroke.toml); hull damping still open (0.4 /s proposed).
+- Parameter regime (omega/omega0, damping, stroke) from the Phase 1 sweeps. Answered 2026-11-19: candidate R (see Decisions).
 - First boat stiff or resonant (default stiff).
 - Medal thresholds, from bot and playtest times.
 - Whether the itch page uses the 1900 patent drawing (check the specific scan's rights).
