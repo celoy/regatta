@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "regatta-model"
+version = "0.0.0"
+description = "Reference model of a magnet-steered boat in an oscillating field (Python twin of the Godot sim)"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = ["numpy"]
+
+[project.optional-dependencies]
+toy = ["pygame-ce"]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["model"]
+include = ["regatta_model*"]
+
+[tool.pytest.ini_options]
+testpaths = ["model/tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["model"]
+extend-exclude = ["game"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
