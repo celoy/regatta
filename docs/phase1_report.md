@@ -1,13 +1,13 @@
 # Phase 1 report: model, tests and sweeps
 
-2026-11-19. Code at `model/regatta_model/`, sweeps in `tools/sweeps.py`, runs listed in `docs/run_log.md`.
+2026-11-19, second pass the same day after Chris's review. Code at `model/regatta_model/`, sweeps in `tools/sweeps.py`, runs listed in `docs/run_log.md`.
 
 ## Summary
 
 The model is built and tested, and the sweeps contradict three points of the brief.
 
 1. **The default parameters do not give a lock.** With ideal presses the boat locks from at most 6 of 10 random starts in one cell of the lock window and from fewer than 3 of 10 elsewhere. Most starts end in a period-2 wobble.
-2. **The still-tiller boat is not chaotic at the default parameters.** It spins at exactly one turn per beat, locked to the field. Chaos appears only for a much stronger field, omega/omega0 between about 0.4 and 0.6.
+2. **The still-tiller boat is chaotic without dissipation, and the game's damping removes it.** With no hull drag and no tiller damping it is chaotic at every field strength tested. At the default damping it tumbles irregularly for about 8 beats, then spins at exactly one turn per beat, locked to the field. Sustained chaos at that damping needs a much stronger field, omega/omega0 between about 0.4 and 0.6. (Corrected in the second pass; the first version of this report said "not chaotic" without having tested low damping.)
 3. **The duty cycle does not steer.** The locked hull sits at phi ± 90° − i_m × (mean alpha), with i_m = I_m/(I_m + I_h) = 1/6, and not at phi ± 90° − (mean alpha). Measured: within 3° of the perpendicular for D from 0.3 to 0.7. A locked boat therefore has two headings, and they are opposite.
 
 Two points of the brief hold once the stroke is larger (candidate A: alpha0 = 65°, omega/omega0 = 1.1):
@@ -15,13 +15,91 @@ Two points of the brief hold once the stroke is larger (candidate A: alpha0 = 65
 4. **The lock has a skill gradient in human range.** Lock rate 0.99 at 40 ms jitter, 0.05 at 120 ms.
 5. **A half-beat shift tacks the boat in 2 beats** when the new pattern starts from a press, 4 from a release.
 
-Point 3 is the one that matters for the game: with one field axis and a locked boat, the course is a straight line. This needs a decision from Chris before Phase 2 (see "Decisions needed").
+Point 3 is the one that matters for the game: with one field axis and a locked boat, the course is a straight line. The second pass tested the two steering ideas Chris chose, and neither gives usable steering near candidate A (next section).
+
+## Second pass: chaos, phase steering, heavier magnet
+
+Chris's answers to the first version: try phase steering, then a heavier magnet; the system is chaotic without dissipation; parameter set A. Three sweeps were added (`chaos`, `steer`, `magnet` in `tools/sweeps.py`).
+
+### Chaos against dissipation
+
+Chris is right, and the sweep says where chaos stops. Still tiller, 12 starts per cell, exponent over 450 beats.
+
+| Tiller | Tiller damping zeta | Chaotic at omega/omega0 = 1.1 (A) for hull damping up to | Chaotic at any damping tested (up to 0.7 /s) |
+|---|---|---|---|
+| Default, omega_s = 4 omega | 0 | 0.01 /s (2 starts in 10) | omega/omega0 = 0.4 to 0.6 |
+| Default | 0.05 | none | 0.4 to 0.6 |
+| Default | 0.5 | none | 0.4 to 0.5 (0.6 at 0.7 /s only) |
+| Stiff, omega_s = 20 omega | 0 | 0.02 /s (2 in 10; 5 in 10 at 0.01) | 0.6 |
+| Stiff | 0.5 | 0.02 /s (2 in 10) | 0.6 |
+
+- With no dissipation at all (hull drag and tiller damping zero), at least 8 starts in 10 are chaotic at every omega/omega0 from 0.4 to 1.5, for both tillers.
+- For the default tiller the tiller damping does most of the damage: at zeta = 0.5 chaos is gone for omega/omega0 ≥ 0.6 even with no hull drag. A stiff tiller is barely excited by the field and keeps chaos at zero hull drag for any zeta.
+- At the game's damping the tumbling is a transient. Candidate A's field, default tiller: median 8 beats (longest 11) before the spin sets in at 0.7 /s, 39 (51) at 0.1 /s, 52 (59) at 0.05 /s.
+- Candidate A at almost no dissipation (zeta = 0, hull damping 0.01 /s, `candidate_a_low_damping.toml`) does not lock at any duty cycle or phase. The lock needs damping to settle.
+- Checks of the exponent: started on the unstable aligned state it gives 1.9456 /s against 1.9434 /s from the Floquet multiplier (rigid, undamped, omega/omega0 = 1.2) and 1.2083 against 1.2055 (default tiller and damping); halving dt changes a chaotic exponent from 0.9265 to 0.9267 /s, inside its statistical error of 0.008.
+
+A scan of the hull damping on candidate A (scratch script, 16 starts) shows a middle ground:
+
+| Hull damping (1/s) | 0.05 | 0.1 | 0.2 | 0.3 | 0.4 | 0.7 |
+|---|---|---|---|---|---|---|
+| Still tiller: beats of tumbling before the spin (median) | 46 | 34 | 21 | 16 | 12 | 8 |
+| Lock from a random start | 0.44 | 0.56 | 1.00 | 1.00 | 1.00 | 1.00 |
+| Beats to reach the lock (median) | 44 | 30 | 20 | 20 | 7 | 3 |
+| Lock rate at 40 ms jitter | 0.07 | 0.34 | 0.60 | 0.99 | 0.90 | 0.99 |
+| Tack (beats) | 10 | 13 | 23 | 2 | 2 | 2 |
+
+Around 0.3 to 0.4 /s the unlocked boat tumbles for 12 to 16 beats and the lock, the jitter tolerance and the 2-beat tack survive.
+
+### Phase steering
+
+It works for ideal presses in the stable regime with a small stroke, and fails at human timing.
+
+- Static map (8 starts, 160 beats, phase in 10° steps, D from 0.2 to 0.8). Number of 10° heading bins, of 36, that at least half of the starts hold at some phase, for D = 0.5 alone / for any D, then the mean lock fraction:
+
+| omega/omega0 | alpha0 = 15° | 25° | 35° | 45° | 55° | 65° |
+|---|---|---|---|---|---|---|
+| 1.10 (A's field) | 0 / 0 / 0.00 | 3 / 3 / 0.06 | 4 / 14 / 0.12 | 6 / 11 / 0.18 | 6 / 8 / 0.26 | 9 / 13 / 0.34 |
+| 1.35 | 7 / 16 / 0.47 | 8 / 31 / 0.48 | 9 / 31 / 0.44 | 11 / 34 / 0.46 | 10 / 30 / 0.52 | 10 / 26 / 0.64 |
+| 1.50 | 26 / 30 / 0.97 | 21 / 36 / 0.93 | 10 / 36 / 0.90 | 13 / 34 / 0.89 | 9 / 28 / 0.94 | 6 / 23 / 0.95 |
+
+- At omega/omega0 = 1.5 and alpha0 = 15° (grip 0.93) the heading follows a slowly drifting press phase smoothly: −72°, −56°, −29°, 1°, 30°, 57°, 72°, then back, for each 30° of phase. It swings ±72° about the field axis and stays on one side; the mirror branch points the other way. The theory's headings are within 2° of the settled ones.
+- A step of the press phase settles in 4 beats for 30°, 7 to 9 beats for 60° to 150°.
+- With timing jitter, at a heading 60° of phase away from the tack: heading scatter 6° at 20 ms, 26° at 40 ms with jumps to the mirror branch, 62° at 80 ms.
+- At candidate A's field the small strokes do not lock at all, and A itself shows only the two tacks.
+
+Against the criterion of the plan (30° either side reachable, 90 % of starts, settled within 5 beats, scatter below 10° at 40 ms jitter): reach and starts pass, settling and jitter fail. It also means giving up A: the stable regime has no spin when unlocked and tacks take 8 beats or more.
+
+### Heavier magnet
+
+The recoil steering is real and small. Heading range over the duty cycles that lock from 3 starts in 4, lock rate at 40 ms jitter, and tack time:
+
+| omega/omega0 | I_m/I_h | alpha0 | Heading range | Lock at 40 ms | Tack (beats) |
+|---|---|---|---|---|---|
+| 1.1 (A) | 0.2 | 65° | 6° | 0.98 | 2 |
+| 1.1 | 0.5 | 80° | 15° | 0.89 | 2 |
+| 1.1 | 0.5 | 65° | no lock | 0.25 | none |
+| 1.1 | 1.0 | 65° or 80° | one duty cycle only | 0.17 to 0.39 | 12 to 23 |
+| 1.3 | 0.5 | 80° | 17° | 0.95 | 5 |
+| 1.5 | 0.5 | 80° | 21° | 0.96 | 8 |
+| 1.5 | 1.0 | 80° | 28° | 0.77 | 18 |
+| 1.5 | 2.0 | 65° | 34° | 0.60 | none |
+
+A heavier magnet loses grip faster than it gains steering (the rectified torque goes as sin(i_h alpha0), with i_h the hull's share of the inertia). The best compromise near A is I_m/I_h = 0.5 with alpha0 = 80°: ±7° of steering.
+
+### Where this leaves steering
+
+Neither option steers a boat that keeps A's lock and tack. What the sweeps support:
+
+- With one field axis, a locked boat goes along one line, in either direction. Trim of ±3° (A) to ±7° (heavier magnet, alpha0 = 80°) is available from the duty cycle.
+- The remaining route to a course with turns is a field axis that changes along the course, which is already in the brief as the "wind shift" pond: the boat follows phi ± 90°, the player keeps the rhythm, picks the tack and trims with the duty cycle.
+- Phase steering is a different game: stable regime, small stroke, timing precision near 20 ms.
 
 ## Fun hypothesis against the sweeps
 
 | Hypothesis | Default | Candidate A | Candidate B |
 |---|---|---|---|
-| Still tiller chaotic | No: spins with the field, largest exponent −0.40 /s | No: same | No: aligns with the axis |
+| Still tiller chaotic | Only as a transient of about 8 beats, then spins with the field (exponent −0.40 /s) | Same | No: aligns with the axis |
 | Lock rate ≥ 0.95 at 40 ms jitter | No lock even at 0 ms | 0.99 | 1.00 |
 | Lock lost often at 120 ms | n/a | Yes: 0.05 | Half: 0.51, and never leaves the tack |
 | Tack within 3 beats | n/a | 2 (from a press), 4 (from a release) | 9 |
@@ -34,12 +112,13 @@ Candidates: A = `toy/params/candidate_a_strong_stroke.toml` (omega/omega0 = 1.1,
 
 The model is the two-body system of the brief, integrated by RK4 at dt = 1/480 s, with inertias normalised by I_m + I_h = 1. `dynamics.simulate` splits steps at the exact event times and is the reference for the golden files of Phase 3. `dynamics.run_beats` is the ensemble integrator of the sweeps; it rounds press and release times to the grid (error up to 1 ms).
 
-All 10 tests pass (`.venv/bin/pytest`):
+All 13 tests pass (`.venv/bin/pytest`):
 
 - Tests 1, 2, 4 and 5 of the brief, as written.
 - Test 3 of the brief at D = 0.5, where both heading formulas agree.
 - Test 3b, added: at D = 0.3 the heading is within 2° of phi − 90° − i_m × (mean alpha) and more than 8° from the brief's formula.
 - Stiff-tiller rectification against its closed form; Mathieu threshold 1.484 for a nearly rigid, undamped boat.
+- Heading clustering, transient length and off-tempo presses (helpers of the second pass).
 
 The closed forms were also checked symbolically with sympy (run once through `uv run --with sympy`, not added as a dependency).
 
@@ -173,20 +252,19 @@ My recommendation is candidate A for the feel of the lock and the tack, with the
 
 ## Decisions needed
 
-1. **Steering.** A locked boat has two opposite headings, so "duty cycle steers" in Decisions does not hold. Options I see, none implemented:
-   - The field axis changes along the course (several coil pairs, or the drift already planned for "wind shift" ponds). The boat's course follows phi ± 90°, the player keeps the rhythm and chooses the tack. Keeps one button and the half-beat tack.
-   - A heavier magnet. The recoil steering is −i_m alpha0 (2D − 1): with I_m = I_h and alpha0 = 65° that is ±13° for D from 0.3 to 0.7. It changes the dynamics and needs its own sweeps.
-   - Phase steering in the stable regime (candidate C). Promising on paper, slow and unproven in the sweeps.
-2. **Chaos.** "With a still tiller the boat tumbles" holds only as a regular spin at one turn per beat, for A and for the defaults. The pitch line "tames the chaos" is not supported by these parameters. Chaos needs omega/omega0 near 0.5, where the lock is patchy.
-3. **Parameter set for Phase 2**: A, B, or another point of the design scan.
+1. **Steering.** Both options tested fail near A. Does the game take the changing field axis (course shape set by the coils, duty cycle as trim), or move to the stable regime for phase steering? "Duty cycle steers" in Decisions needs rewording either way; I have not changed it.
+2. **Hull damping.** 0.7 /s gives 8 beats of tumbling before the spin; 0.3 to 0.4 /s gives 12 to 16 and keeps the lock. Sustained chaos needs near-zero damping, where nothing locks. The pitch line "tames the chaos" and the Decisions entry "with a still tiller the boat tumbles" fit a transient, not an attractor.
+3. **Parameter set**: A is recorded as chosen. Proposed adjustment: hull damping 0.4 /s, to be confirmed by playing in Phase 2.
 
 ## Limits of these results
 
 - Small ensembles: 8 to 16 starts per cell, 32 seeds for jitter. Fractions are coarse.
-- In `lock_window.csv` the locked headings are averaged per side of the field axis. Where the grip is below 1 there are two mirror headings on the same side, and their average reads as ±90°. This affects candidates B and C near the edges of their phase bands, not the tables above.
+- In `lock_window.csv` the locked headings are averaged per side of the field axis. Where the grip is below 1 there are two mirror headings on the same side, and their average reads as ±90°. This affects candidates B and C near the edges of their phase bands, not the tables above. `steer_static.csv` (second pass) lists every branch separately.
 - The jitter sweep starts on the tack; recovery after a lost lock is not measured.
 - Linear hull drag only; no soft stops; one tiller (omega_s = 4 omega, zeta = 0.5) and one inertia ratio throughout.
-- The chaos search below omega/omega0 = 0.8 and the stable-regime theory check were run from scratch scripts, not from `tools/sweeps.py`.
+- Run from scratch scripts, not from `tools/sweeps.py`: the stable-regime theory check, the hull-damping scan on A, and the phase-steering details (drifting phase, step response, jitter scatter), each for one start or 16 seeds.
+- The heavier-magnet runs at omega/omega0 = 1.3 and 1.5 used temporary parameter files; copies are in their run directories.
+- At strong field (omega/omega0 = 0.4 to 0.6), where chaos survives the game's damping, a quick scan found locks at some phases (default tiller at 0.4 with alpha0 ≥ 45°; stiff tiller at 0.4 to 0.6). Jitter, tack and steering were not measured there.
 
 ## Reproduce
 

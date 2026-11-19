@@ -17,6 +17,7 @@ Working title "Magnet Regatta" (not cleared, see Open questions). This file is t
 - 2026-11-17: brief written; nothing built yet.
 - 2026-11-19: Phase 0 done: public repo celoy/regatta, layout, .venv (Python 3.12, uv), pytest smoke test passing, empty Godot 4.7.2 project exported to web (no threads) and loaded in headless Chrome. Awaiting Chris's go for Phase 1.
 - 2026-11-19: Phase 1 built: model, tests 1-5 (10 pass), sweeps 1-5 plus a design scan, report in docs/phase1_report.md. Findings: defaults give no lock; still tiller spins with the field (not chaotic); duty cycle does not steer (two opposite headings only). Awaiting Chris's review, the steering decision and the parameter set for Phase 2.
+- 2026-11-19: Phase 1 second pass after Chris's review (phase steering then heavier magnet; chaos without dissipation; set A). Chaos confirmed at zero dissipation and lost at the game's damping (8-beat transient at 0.7 /s); phase steering works only in the stable regime and fails at 40 ms jitter; heavier magnet gives at most ±7° near A. 13 tests pass. Awaiting Chris's decision on steering (changing field axis or stable regime) and on hull damping (0.4 /s proposed).
 
 ## Deadline and jam
 
@@ -229,7 +230,7 @@ Cut list, in this order: field-drift ponds; resonant boat; best-run ghost; Audio
 - Licence for the public repo. Answered 2026-11-19: MIT.
 - Confirm the jam's rule on AI-assisted code before submitting.
 - Godot version installed. Answered 2026-11-19: 4.7.2 stable, with web export templates.
-- Parameter regime (omega/omega0, damping, stroke) from the Phase 1 sweeps.
+- Parameter regime (omega/omega0, damping, stroke) from the Phase 1 sweeps. Answered 2026-11-19: candidate A (omega/omega0 = 1.1, alpha0 = 65°, toy/params/candidate_a_strong_stroke.toml); hull damping still open (0.4 /s proposed).
 - First boat stiff or resonant (default stiff).
 - Medal thresholds, from bot and playtest times.
 - Whether the itch page uses the 1900 patent drawing (check the specific scan's rights).

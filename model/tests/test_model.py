@@ -118,3 +118,28 @@ def test_mathieu_threshold_rigid_undamped(p0: Params) -> None:
     assert r == pytest.approx(1.484, abs=1e-3)
     assert an.floquet_aligned(rigid.with_(omega0=rigid.omega / (r - 0.04))) > 1.01
     assert an.floquet_aligned(rigid.with_(omega0=rigid.omega / (r + 0.04))) < 1.001
+
+
+def test_cluster_angles_groups_across_the_wrap() -> None:
+    groups = an.cluster_angles(np.array([-178, 179, 177, 10, 12, 90]) * DEG, 8 * DEG)
+    assert [count for _, count in groups] == [3, 2, 1]
+    assert abs(th.wrap(groups[0][0] - 179.33 * DEG)) < 0.1 * DEG
+    assert groups[1][0] == pytest.approx(11 * DEG)
+    assert an.cluster_angles(np.array([]), 8 * DEG) == []
+
+
+def test_transient_beats_finds_the_start_of_regular_motion() -> None:
+    rng = np.random.default_rng(0)
+    steps = np.concatenate([rng.uniform(-3, 3, 12), np.full(40, 2 * np.pi)])  # tumble, then spin
+    h = np.cumsum(steps)[:, None]
+    assert 9 <= an.transient_beats(h)[0] <= 12
+    assert an.transient_beats(np.cumsum(np.full((30, 1), 0.3), axis=0))[0] == 0
+
+
+def test_button_with_off_tempo_period_drifts_in_phase(p0: Params) -> None:
+    """A press period 1 % long delays the press by 1 % of a beat per beat, per member."""
+    period = p0.period * np.array([1.0, 1.01])
+    button = dyn.periodic_button(0.0, 0.5, period)
+    assert np.array_equal(button(10 * p0.period + 0.05), [1.0, 0.0])  # second one is 0.1 s late
+    assert np.array_equal(button(10 * p0.period + 0.15), [1.0, 1.0])
+    assert np.array_equal(button(10 * p0.period + 0.55), [0.0, 1.0])

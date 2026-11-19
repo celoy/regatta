@@ -589,6 +589,85 @@ def sweep_steer(p0: Params, out: Out, rng: np.random.Generator) -> None:
     )
 
 
+def sweep_magnet(p0: Params, out: Out, rng: np.random.Generator) -> None:
+    out.say("== 9. Heavier magnet: recoil steering by the duty cycle (nominal phase)")
+    inertia = np.array([0.2, 0.5, 1.0, 2.0])
+    alphas = np.array([p0.alpha0 / DEG, 80.0])
+    duties = np.round(np.arange(0.2, 0.801, 0.05), 2)
+    n_ic = 8
+    ii, a, d, h0 = np.meshgrid(
+        inertia, alphas * DEG, duties, rng.uniform(-np.pi, np.pi, n_ic), indexing="ij"
+    )
+    p = p0.with_(inertia_ratio=ii.ravel(), alpha0=a.ravel())
+    psi = th.nominal_centre_phase(p0)
+    button = dyn.periodic_button(press_time(p0, d.ravel(), psi), d.ravel(), p0.period)
+    _, _, hull = dyn.run_beats(p, dyn.rest_state(p, h0.ravel()), 80, button)
+    locked = (an.window_spread(hull[-LOCK_WINDOW:], LOCK_WINDOW)[0] < LOCK_TOL).reshape(ii.shape)
+    head = th.wrap(hull[-LOCK_WINDOW:].mean(axis=0) - p0.phi).reshape(ii.shape)
+    # Jitter and tack at D = 0.5, one value per (inertia ratio, stroke).
+    i2, a2, s2 = np.meshgrid(inertia, alphas * DEG, np.arange(n_ic), indexing="ij")
+    p2 = p0.with_(inertia_ratio=i2.ravel(), alpha0=a2.ravel())
+    hj = jitter_run(p2, 0.5, 0.04, 30, 150, rng, i2.size)
+    lock40 = an.lock_flags(hj, LOCK_WINDOW, LOCK_TOL).mean(axis=0).reshape(i2.shape).mean(-1)
+    on40 = (np.abs(th.wrap(hj - tack_target(p2, 0.5))) < ON_TACK_TOL).mean(axis=0)
+    on40 = on40.reshape(i2.shape).mean(-1)
+    started, beats = tack_run(p2, 0.5, False, rng.uniform(-np.pi, np.pi, i2.size), 40, 40)
+    beats = np.where(started, beats, np.nan).reshape(i2.shape)
+    rows = []
+    for i, ratio in enumerate(inertia):
+        for j, alpha in enumerate(alphas):
+            q = p0.with_(inertia_ratio=ratio, alpha0=alpha * DEG)
+            good = []
+            for k, duty in enumerate(duties):
+                sel = locked[i, j, k] & (np.sin(head[i, j, k]) < 0)
+                groups = an.cluster_angles(head[i, j, k][sel], 8 * DEG)
+                h = float(th.wrap(groups[0][0])) if groups else np.nan
+                share = groups[0][1] / n_ic if groups else 0.0
+                recoil = float(-0.5 * np.pi - q.i_m * th.alpha_mean(q, duty))
+                rows.append(
+                    [
+                        float(ratio),
+                        float(alpha),
+                        float(duty),
+                        float(locked[i, j, k].mean()),
+                        share,
+                        h / DEG,
+                        recoil / DEG,
+                        th.grip(q, float(duty), psi),
+                    ]
+                )
+                if share >= 0.75:
+                    good.append((duty, h / DEG))
+            with np.errstate(all="ignore"):
+                tb = np.nanmedian(beats[i, j]) if np.isfinite(beats[i, j]).any() else np.nan
+            rng_txt = "no duty cycle locks from 3 starts in 4"
+            if good:
+                hs = [g[1] for g in good]
+                rng_txt = (
+                    f"D {good[0][0]:.2f} to {good[-1][0]:.2f}: heading {hs[0]:+.0f} to "
+                    f"{hs[-1]:+.0f} deg, range {max(hs) - min(hs):.0f} deg"
+                )
+            out.say(
+                f"  I_m/I_h = {ratio:3.1f}, alpha0 = {alpha:.0f}: grip {th.grip(q, 0.5, psi):.2f}; "
+                f"{rng_txt}; 40 ms jitter lock {lock40[i, j]:.2f}, on tack {on40[i, j]:.2f}; "
+                f"tack {tb:.0f} beats"
+            )
+    out.csv(
+        "magnet.csv",
+        [
+            "inertia_ratio",
+            "alpha0_deg",
+            "duty",
+            "lock_frac",
+            "share_on_minus_tack",
+            "heading_deg",
+            "recoil_formula_deg",
+            "grip",
+        ],
+        rows,
+    )
+
+
 SWEEPS: dict[str, Callable[[Params, Out, np.random.Generator], None]] = {
     "regime": sweep_regime,
     "lock": sweep_lock,
@@ -598,6 +677,7 @@ SWEEPS: dict[str, Callable[[Params, Out, np.random.Generator], None]] = {
     "design": sweep_design,
     "chaos": sweep_chaos,
     "steer": sweep_steer,
+    "magnet": sweep_magnet,
 }
 
 
