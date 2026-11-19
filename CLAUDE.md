@@ -13,7 +13,7 @@ Working title "Magnet Regatta" (not cleared, see Open questions). This file is t
 
 ## Status
 
-- CURRENT: Phase 0
+- CURRENT: Phase 1
 - 2026-11-17: brief written; nothing built yet.
 - 2026-11-19: Phase 0 done: public repo celoy/regatta, layout, .venv (Python 3.12, uv), pytest smoke test passing, empty Godot 4.7.2 project exported to web (no threads) and loaded in headless Chrome. Awaiting Chris's go for Phase 1.
 

@@ -1,0 +1,15 @@
+# Default parameters (CLAUDE.md, "Default parameters"). All are guesses until
+# the Phase 1 sweeps are reviewed. Inertias are normalised by I_m + I_h = 1.
+
+field_hz = 1.0               # field frequency omega / (2 pi), Hz (one beat per period)
+omega_over_omega0 = 1.2      # omega / omega0, omega0^2 = mu B / (I_m + I_h); < 1.48: still tiller unstable
+hull_damping = 0.7           # gamma / (I_m + I_h), 1/s
+inertia_ratio = 0.2          # I_m / I_h
+alpha0_deg = 35.0            # tiller half-range: rest at -alpha0, held at +alpha0
+omega_s_over_omega = 4.0     # tiller natural frequency / field frequency
+zeta = 0.5                   # tiller damping ratio
+v = 1.5                      # boat speed, length units / s
+steps_per_second = 480       # dt = 1 / steps_per_second
+phi_deg = 0.0                # field axis
+stop_ratio = 1.3             # soft stops at +- stop_ratio * alpha0
+stop_stiffness_ratio = 0.0   # stop stiffness / k; 0 switches the stops off
