@@ -27,8 +27,8 @@ Chris is right, and the sweep says where chaos stops. Still tiller, 12 starts pe
 
 | Tiller | Tiller damping zeta | Chaotic at omega/omega0 = 1.1 (A) for hull damping up to | Chaotic at any damping tested (up to 0.7 /s) |
 |---|---|---|---|
-| Default, omega_s = 4 omega | 0 | 0.01 /s (2 starts in 10) | omega/omega0 = 0.4 to 0.6 |
-| Default | 0.05 | none | 0.4 to 0.6 |
+| Default, omega_s = 4 omega | 0 | 0.02 /s (1 start in 10; 2 in 10 at 0.01) | omega/omega0 = 0.4 to 0.6 |
+| Default | 0.05 | none | 0.4 to 0.5 (0.6 up to 0.4 /s) |
 | Default | 0.5 | none | 0.4 to 0.5 (0.6 at 0.7 /s only) |
 | Stiff, omega_s = 20 omega | 0 | 0.02 /s (2 in 10; 5 in 10 at 0.01) | 0.6 |
 | Stiff | 0.5 | 0.02 /s (2 in 10) | 0.6 |
@@ -63,7 +63,7 @@ It works for ideal presses in the stable regime with a small stroke, and fails a
 | 1.35 | 7 / 16 / 0.47 | 8 / 31 / 0.48 | 9 / 31 / 0.44 | 11 / 34 / 0.46 | 10 / 30 / 0.52 | 10 / 26 / 0.64 |
 | 1.50 | 26 / 30 / 0.97 | 21 / 36 / 0.93 | 10 / 36 / 0.90 | 13 / 34 / 0.89 | 9 / 28 / 0.94 | 6 / 23 / 0.95 |
 
-- At omega/omega0 = 1.5 and alpha0 = 15° (grip 0.93) the heading follows a slowly drifting press phase smoothly: −72°, −56°, −29°, 1°, 30°, 57°, 72°, then back, for each 30° of phase. It swings ±72° about the field axis and stays on one side; the mirror branch points the other way. The theory's headings are within 2° of the settled ones.
+- At omega/omega0 = 1.5 and alpha0 = 15° (grip 0.93) the heading follows a slowly drifting press phase smoothly: −72°, −56°, −29°, 1°, 30°, 57°, 72°, then back, for each 30° of phase. It swings ±72° about the field axis and stays on one side; the mirror branch points the other way. The theory's headings are within 4° of the settled ones.
 - A step of the press phase settles in 4 beats for 30°, 7 to 9 beats for 60° to 150°.
 - With timing jitter, at a heading 60° of phase away from the tack: heading scatter 6° at 20 ms, 26° at 40 ms with jumps to the mirror branch, 62° at 80 ms.
 - At candidate A's field the small strokes do not lock at all, and A itself shows only the two tacks.
