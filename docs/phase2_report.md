@@ -128,6 +128,32 @@ Chris's first run of T01 (kept in `runs/toy/best_T01_tin_tug.json`, old 1 Hz bea
 - **T01** keeps its ring and bow mark, with a one-line hint.
 - **Best runs:** the file name now carries a hash of the parameters and the course, since a timeline only replays under the set-up it was recorded with. Runs made before a change are kept and not used.
 
+## Wind boat prototype (2026-11-20, for comparison at Gate B)
+
+Chris found the magnet boat hard and not clearly fun, and asked whether a rotating wind and a sail would give the same mechanics. The wind boat is in the toy next to the magnet boat (key M, or `--model wind`); no Decisions entry is changed.
+
+**Model** (`model/regatta_model/wind.py`, parameters in `toy/params/wind.toml`). The wind blows at constant strength and turns once per beat. Holding the button raises the sail. Linear hull drag, no keel, no heading dynamics: v' = (s v_max w(t) − v) / tau, with s = 1 while the sail is up. Assumptions: wind much faster than the boat (force independent of boat velocity), isotropic sail (force along the wind), linear drag.
+
+- **Mean velocity:** v_max sin(pi D) / pi along the wind direction at the middle of the hold. Checked at 9 combinations of duty cycle and direction to 10⁻³ v_max.
+- **Sail left up:** a circle of radius v_max / (omega sqrt(1 + omega² tau²)) = 0.29 units, no net motion. Checked to 10⁻³.
+- **Parameters:** beat 0.75 Hz, tau = 0.5 s, v_max = 3.534 so that perfect half-beat holds give 1.125 units/s, the magnet boat's speed.
+- **Race rules** are shared with the magnet boat (gates, banks, 1 s stop, input timeline); a collision also zeroes the velocity.
+
+**Viewer.** A dot on a ring round the boat shows where the wind is blowing; an arrow shows the push of the last beat; faint arrows on the pond show the wind. The tutorial (`courses/TUT_wind.json`) has the same three stages, with a green half-ring centred on the target: hold while the dot is in the green. On T01 the green half points to the next gate.
+
+**Scripted player** (sail up while the wind is within 90° of the bearing to the next gate, Gaussian error on each press and release, 2 seeds per cell; finish times in s):
+
+| Timing error | T01 | T02 | T03 |
+|---|---|---|---|
+| 40 ms | 16.1, 16.4 | 21.4, 21.7 | 28.9, 28.9 |
+| 80 ms | 16.1, 15.9 | 23.4, 22.7 | 30.1, 30.2 |
+| 120 ms | 16.2, 17.8 | 23.7, 23.8 | 31.2, 30.6 |
+| 200 ms | 17.5, 17.8 | 26.3, 32.0 | 36.6, 42.3 |
+
+No collisions up to 120 ms. For comparison, the magnet pilot at 120 ms is 1.5 to 1.9 times slower than at 20 ms on T02 and T03; the wind player loses about 8 %. Two caveats: this player reacts to the dot on every beat, so its errors do not accumulate as they do for a player keeping a rhythm from memory; and the result says the wind boat is forgiving, not that it is fun. It may be too easy on these courses; the knobs are tau, the gate widths and the obstacles.
+
+**Tests:** 14 new (40 pass): the two formulas, a T01 run with replay, the wind drill passing with ideal holds and not passing when idle or held.
+
 ## Gate B, for Chris
 
 1. Play T01 to T03 with both boats.

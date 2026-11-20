@@ -6,7 +6,8 @@
 
 Keys: Space the button (hold = magnet swung to one side), P pause (resumes after a
 one-beat count-in), R restart, G ghost of the best run, S screenshot, L reload parameters,
-courses and boats from their files, 0 tutorial, 1-3 test courses, B cycle boats, Esc quit.
+courses and boats from their files, M magnet boat / wind boat, 0 tutorial, 1-3 test
+courses, B cycle boats, Esc quit.
 
 How to steer: the field turns once per beat. The aim dial (right) has a hand that points
 where a press made now (held for half a beat) would send the boat. Press every beat when
@@ -36,14 +37,17 @@ import numpy as np
 import pygame
 
 from regatta_model import analysis as an
-from regatta_model.drill import Drill, is_tutorial, load_drill
+from regatta_model.drill import Drill, is_tutorial, load_drill, make_race
 from regatta_model.params import Params, load_params
 from regatta_model.race import Boat, Course, Race, load_boat, load_course
+from regatta_model.wind import WindParams, load_wind_params
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE_PARAMS = ROOT / "toy" / "params" / "game.toml"
 COURSES = ["TUT", "T01", "T02", "T03"]  # keys 0-3
 RUNS = ROOT / "runs" / "toy"
+WIND_PARAMS = ROOT / "toy" / "params" / "wind.toml"
+WIND_BOAT = Boat(id="skiff", name="Skiff (wind)", radius=0.3, params={})
 
 PAPER = (243, 236, 218)
 WATER = (233, 228, 210)
@@ -64,7 +68,13 @@ RING_R = 1.0  # aim ring radius round the boat, length units
 DISPLAY_DEFAULTS = {"field_arrow": True, "coils": True, "ring": False, "hint": []}
 
 
-def load_setup(course_id: str, boat_id: str | None) -> tuple[Params, Course, Boat]:
+def load_setup(
+    course_id: str, boat_id: str | None, wind: bool = False
+) -> tuple[Params | WindParams, Course, Boat]:
+    if wind:  # the wind boat uses <course>_wind.json where there is one (tutorial texts)
+        path = ROOT / "courses" / f"{course_id}_wind.json"
+        course = load_course(path if path.exists() else ROOT / "courses" / f"{course_id}.json")
+        return load_wind_params(WIND_PARAMS), course, WIND_BOAT
     course = load_course(ROOT / "courses" / f"{course_id}.json")
     boat = load_boat(ROOT / "boats" / f"{boat_id or course.boat}.json")
     return load_params(BASE_PARAMS, boat.params), course, boat
@@ -76,6 +86,7 @@ class Viewer:
         self.boats = sorted(p.stem for p in (ROOT / "boats").glob("*.json"))
         self.course_id = args.course
         self.boat_id = args.boat
+        self.wind = args.model == "wind"  # which boat: magnet (False) or wind (True)
         self.show_ghost = True
         self.font = pygame.font.Font(None, 26)  # pygame's bundled font
         self.small = pygame.font.Font(None, 20)
@@ -86,17 +97,22 @@ class Viewer:
     # --- setup -----------------------------------------------------------------------
 
     def load(self) -> None:
-        p, self.course, self.boat = load_setup(self.course_id, self.boat_id)
-        self.boat_id = self.boat.id
+        p, self.course, self.boat = load_setup(self.course_id, self.boat_id, self.wind)
+        if not self.wind:
+            self.boat_id = self.boat.id
         # tutorial courses run a drill on a moored boat instead of a race
         self.drill: Drill | None = (
             load_drill(p, self.course, self.boat.radius) if is_tutorial(self.course) else None
         )
-        self.race = self.drill.race if self.drill else Race(p, self.course, self.boat.radius)
+        self.race = self.drill.race if self.drill else make_race(p, self.course, self.boat.radius)
         self.p = self.race.p
-        self.h0 = an.heading_offset(self.p)  # heading = h0 - (field phase at hold centre)
+        # magnet boat: heading = h0 - (field phase at hold centre)
+        self.h0 = 0.0 if self.wind else an.heading_offset(self.p)
         # what the course shows (tutorial courses hide the field and add the aim ring)
         self.display = DISPLAY_DEFAULTS | self.course.raw.get("display", {})
+        if self.wind:
+            self.display["hint"] = self.display.get("hint_wind", [])
+        self.vel_hist: deque[tuple[float, float, float]] = deque(maxlen=4000)
         self.best = self.read_best()
         self.ghost = self.make_ghost()
         self.wake: deque[tuple[float, float]] = deque(maxlen=400)
@@ -106,7 +122,7 @@ class Viewer:
         self.countin_left = self.p.period
         self.message = ""
         self.bot = None
-        if self.args.bot and self.drill is None:
+        if self.args.bot and self.drill is None and not self.wind:
             sys.path.insert(0, str(ROOT / "tools"))
             import bots  # noqa: PLC0415
 
@@ -136,7 +152,7 @@ class Viewer:
     def make_ghost(self) -> Race | None:
         if not self.best:
             return None
-        ghost = Race(self.p, self.course, self.boat.radius)
+        ghost = make_race(self.p, self.course, self.boat.radius)
         for t, s in self.best["timeline"]:
             ghost.set_button(t, s)
         return ghost
@@ -177,7 +193,10 @@ class Viewer:
             self.message = "parameters reloaded"
         elif k == pygame.K_g:
             self.show_ghost = not self.show_ghost
-        elif k == pygame.K_b:
+        elif k == pygame.K_m:  # magnet boat <-> wind boat, same course
+            self.wind = not self.wind
+            self.load()
+        elif k == pygame.K_b and not self.wind:
             self.boat_id = self.boats[(self.boats.index(self.boat_id) + 1) % len(self.boats)]
             self.load()
         elif k in (pygame.K_0, pygame.K_1, pygame.K_2, pygame.K_3):
@@ -224,6 +243,8 @@ class Viewer:
             if race.n % 8 == 0:
                 self.alpha_hist.append((race.t, race.magnet - race.heading))
                 self.head_hist.append((race.t, race.heading))
+                if self.wind:
+                    self.vel_hist.append((race.t, *race.velocity))
             if race.n % 48 == 0:
                 self.wake.append(tuple(race.pos))
         if self.ghost is not None:
@@ -256,7 +277,7 @@ class Viewer:
     def finish(self) -> None:
         t = self.race.finish_time
         msg = f"finished in {t:.2f} s"
-        if self.course.par:
+        if self.course.par and not self.wind:  # pars are the magnet boat's
             ratio = t / self.course.par
             medal = next(
                 (m for m, r in (("gold", 1.0), ("silver", 1.15), ("bronze", 1.3)) if ratio <= r),
@@ -296,6 +317,8 @@ class Viewer:
         self.draw_boat(screen, self.race)
         if self.drill is not None:
             self.draw_drill(screen, t)
+        elif self.wind:
+            self.draw_wind_ring(screen, t)
         elif self.display["ring"]:
             self.draw_ring(screen, t)
         for i, line in enumerate(self.display["hint"]):
@@ -326,6 +349,15 @@ class Viewer:
                 h = math.sqrt(max(pr * pr - k * k, 0))
                 pygame.draw.line(screen, FAINT, (cx + k, cy - h), (cx + k, cy + h), 1)
             pygame.draw.circle(screen, INK, (cx, cy), pr, 2)
+        if self.wind:
+            if self.display["field_arrow"]:  # the wind, as a grid of faint arrows
+                a = self.p.wind_angle(t)
+                d = 0.45 * np.array([math.cos(a), math.sin(a)])
+                for gx in np.arange(2.5, c.size[0], 5.0):
+                    for gy in np.arange(2.0, c.size[1], 4.0):
+                        q = np.array([gx, gy])
+                        self.arrow(screen, q - d, q + d, FAINT, 2)
+            return
         # two coil pairs: along the field axis (sin) and across it (e cos)
         p = self.p
         w, h = c.size
@@ -403,6 +435,10 @@ class Viewer:
     def draw_boat(self, screen, race: Race, ghost: bool = False) -> None:
         x, y = race.pos
         th, tm = race.heading, race.magnet
+        if self.wind and not ghost:  # hull along the beat-averaged velocity: steadier
+            vm = self.mean_velocity()
+            if np.hypot(*vm) > 0.05 * self.p.v_max:
+                th = math.atan2(vm[1], vm[0])
         c, s = math.cos(th), math.sin(th)
         hull = [(0.5, 0.0), (0.2, 0.2), (-0.42, 0.2), (-0.42, -0.2), (0.2, -0.2)]
         pts = [self.to_screen((x + c * u - s * v, y + s * u + c * v)) for u, v in hull]
@@ -411,6 +447,20 @@ class Viewer:
             return
         pygame.draw.polygon(screen, PAPER, pts)
         pygame.draw.polygon(screen, INK, pts, 2)
+        if self.wind:  # mast, and the sail bellying downwind while the button is held
+            mid = self.to_screen((x, y))
+            if race.u:
+                a = self.p.wind_angle(self.display_time())
+                w = np.array([math.cos(a), math.sin(a)])
+                n = np.array([-w[1], w[0]])
+                o = np.array([x, y])
+                sail = [o + 0.34 * n, o + 0.28 * w, o - 0.34 * n]
+                pygame.draw.polygon(screen, PAPER, [self.to_screen(q) for q in sail])
+                pygame.draw.lines(screen, BLUE, True, [self.to_screen(q) for q in sail], 3)
+            pygame.draw.circle(screen, INK, mid, 4)
+            if race.stop_timer > 0:
+                pygame.draw.circle(screen, RED, mid, round(0.6 * SCALE), 1)
+            return
         cm, sm = math.cos(tm), math.sin(tm)
         north = self.to_screen((x + 0.32 * cm, y + 0.32 * sm))
         south = self.to_screen((x - 0.32 * cm, y - 0.32 * sm))
@@ -453,7 +503,8 @@ class Viewer:
             band(0.0, 2 * math.pi, GREEN)
             lines, title = tut.get("done", []), "Done"
         else:
-            tol = drill.tolerance
+            # magnet: press while the dot is in the green; wind: hold while it is there
+            tol = 0.5 * math.pi if self.wind else drill.tolerance
             band(drill.target + tol, drill.target - tol + 2 * math.pi, RED)
             band(drill.target - tol, drill.target + tol, GREEN)
             stage = drill.current
@@ -463,6 +514,14 @@ class Viewer:
             a0, a1 = self.aim_angle(race.timeline[-1][0]), self.aim_angle(t)
             arc = [on_ring(a0 + (a1 - a0) * k / 24, radius - 0.28) for k in range(25)]
             pygame.draw.lines(screen, BLUE, False, arc, 4)
+        if self.wind:
+            if not drill.done:  # mark at the middle of the green: where the push should point
+                tip = on_ring(drill.target, radius + 0.14)
+                base = [on_ring(drill.target + k * 0.07, radius + 0.45) for k in (-1, 1)]
+                pygame.draw.polygon(screen, INK, [tip, *base])
+            push = self.mean_velocity() / self.p.mean_speed(0.5)  # 1 = perfect half-beat holds
+            if np.hypot(*push) > 0.05:
+                self.arrow(screen, pos, pos + 0.8 * radius * push, INK, 4)
         dot = on_ring(self.aim_angle(t))
         pygame.draw.circle(screen, PAPER, dot, 12)
         pygame.draw.circle(screen, BLUE, dot, 10)
@@ -478,8 +537,42 @@ class Viewer:
                 pygame.draw.circle(screen, INK, c, 8, 1)
 
     def aim_angle(self, t: float) -> float:
-        """Heading that a press made at time t (held half a beat) settles on."""
+        """Angle of the dot. Magnet boat: the heading that a press made at time t (held half
+        a beat) settles on. Wind boat: the direction the wind blows towards at time t."""
+        if self.wind:
+            return self.p.wind_angle(t)
         return self.h0 - self.p.omega * t - 0.5 * math.pi
+
+    def mean_velocity(self) -> np.ndarray:
+        """Wind boat: velocity averaged over the last beat."""
+        t0 = self.race.t - self.p.period
+        vs = [(vx, vy) for tt, vx, vy in self.vel_hist if tt > t0]
+        return np.mean(vs, axis=0) if vs else np.zeros(2)
+
+    def draw_wind_ring(self, screen, t: float) -> None:
+        """Wind boat in a race: ring with the wind dot, the push of the last beat as an
+        arrow and, on courses that ask for the ring, a green half towards the next gate
+        (hold the sail up while the dot is there)."""
+        race = self.race
+        pos = race.pos
+
+        def on_ring(angle, r=RING_R):
+            return self.to_screen(pos + r * np.array([math.cos(angle), math.sin(angle)]))
+
+        pygame.draw.circle(screen, FAINT, self.to_screen(pos), round(RING_R * SCALE), 1)
+        gates = self.course.gates
+        if self.display["ring"] and gates and not race.finished:
+            a, b = gates[min(race.next_gate, len(gates) - 1)]
+            d = 0.5 * (a + b) - pos
+            bearing = math.atan2(d[1], d[0])
+            arc = [on_ring(bearing + (k / 30 - 0.5) * math.pi) for k in range(31)]
+            pygame.draw.lines(screen, GREEN, False, arc, 5)
+        push = self.mean_velocity() / self.p.mean_speed(0.5)
+        if np.hypot(*push) > 0.05:
+            self.arrow(
+                screen, pos + 0.45 * push / np.hypot(*push), pos + (0.45 + RING_R) * push, INK, 2
+            )
+        pygame.draw.circle(screen, BLUE, on_ring(self.aim_angle(t)), 7)
 
     def draw_ring(self, screen, t: float) -> None:
         """Ring round the boat: a dot turning with the aim, and a mark at the bow.
@@ -519,14 +612,15 @@ class Viewer:
             self.text(screen, f"{clock:6.2f} s", (300, 14), self.big)
         n_gates = len(self.course.gates)
         info = f"gate {min(race.next_gate + 1, n_gates)}/{n_gates}" if n_gates else ""
-        if self.course.par:
+        if self.course.par and not self.wind:
             info += f"   par {self.course.par:.1f} s"
         if self.best:
             info += f"   best {self.best['time']:.2f} s"
         self.text(screen, info, (680, 22))
         x0 = PANEL_X
         self.text(screen, self.boat.name, (x0, 22))
-        self.text(screen, "aim", (DIAL_C[0] - 14, DIAL_C[1] - DIAL_R - 24), self.small)
+        label = "wind" if self.wind else "aim"
+        self.text(screen, label, (DIAL_C[0] - 14, DIAL_C[1] - DIAL_R - 24), self.small)
         # steadiness: change of the beat-averaged heading from the previous beat to the
         # last one (the hull also swings within each beat; that wobble is shown as a number)
         T = self.p.period
@@ -544,7 +638,8 @@ class Viewer:
         self.text(screen, f"wobble {wobble:3.0f} deg", (x0, y + 34), self.small, FAINT)
         self.text(screen, f"collisions {race.collisions}", (x0, y + 54), self.small)
         keys = [
-            "Space: tiller",
+            "Space: sail" if self.wind else "Space: tiller",
+            "M magnet/wind",
             "P pause",
             "R restart",
             "G ghost",
@@ -608,15 +703,23 @@ class Viewer:
         amp = 30
         ts = np.linspace(t0, t1, 400)
         p = self.p
-        along = [(sx(u), mid - amp * math.sin(p.omega * u)) for u in ts]
-        across = [(sx(u), mid - amp * p.ellipticity * math.cos(p.omega * u)) for u in ts]
+        if self.wind:  # the two components of the wind direction
+            along = [(sx(u), mid - amp * math.cos(p.wind_angle(u))) for u in ts]
+            across = [(sx(u), mid - amp * math.sin(p.wind_angle(u))) for u in ts]
+        else:
+            along = [(sx(u), mid - amp * math.sin(p.omega * u)) for u in ts]
+            across = [(sx(u), mid - amp * p.ellipticity * math.cos(p.omega * u)) for u in ts]
         pygame.draw.lines(screen, FAINT, False, across, 1)
         pygame.draw.lines(screen, INK, False, along, 2)
         k0 = math.ceil(t0 * p.omega / math.pi)
         for k in range(k0, int(t1 * p.omega / math.pi) + 1):  # field reversals
             x = sx(k * math.pi / p.omega)
             pygame.draw.line(screen, FAINT, (x, mid - amp - 6), (x, mid + amp + 6), 1)
-        stroke = [(sx(tt), mid - amp * a / p.alpha0) for tt, a in self.alpha_hist if tt > t0]
+        stroke = (
+            []
+            if self.wind
+            else [(sx(tt), mid - amp * a / p.alpha0) for tt, a in self.alpha_hist if tt > t0]
+        )
         if len(stroke) > 1:
             pygame.draw.lines(screen, RED, False, stroke, 2)
         # button holds
@@ -635,14 +738,20 @@ class Viewer:
         if on is not None:
             pygame.draw.rect(screen, INK, (sx(max(on, t0)), y_bar, sx(t) - sx(max(on, t0)), 10))
         pygame.draw.line(screen, RED, (sx(t), r.top), (sx(t), r.bottom), 1)
-        self.text(screen, "field (along / across)", (r.left + 6, r.top + 4), self.small, FAINT)
-        self.text(screen, "tiller", (r.left + 6, r.bottom - 38), self.small, RED)
+        if self.wind:
+            self.text(
+                screen, "wind (east / north), sail up", (r.left + 6, r.top + 4), self.small, FAINT
+            )
+        else:
+            self.text(screen, "field (along / across)", (r.left + 6, r.top + 4), self.small, FAINT)
+            self.text(screen, "tiller", (r.left + 6, r.bottom - 38), self.small, RED)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--course", default="TUT", choices=COURSES)
     ap.add_argument("--boat", default=None)
+    ap.add_argument("--model", choices=["magnet", "wind"], default="magnet", help="which boat")
     ap.add_argument("--frames", type=int, default=0, help="quit after N frames (0: never)")
     ap.add_argument("--fixed-fps", type=float, default=0.0, help="advance 1/F s per frame")
     ap.add_argument("--bot", choices=["pilot", "naive"], default=None, help="a bot drives")

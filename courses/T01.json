@@ -23,6 +23,9 @@
     "ring": true,
     "hint": [
       "Press when the dot reaches the bow mark to go straight; earlier to turn left, later to turn right."
+    ],
+    "hint_wind": [
+      "Hold Space while the wind dot is in the green half of the ring; let go while it is in the other half."
     ]
   }
 }

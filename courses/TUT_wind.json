@@ -1,0 +1,84 @@
+{
+  "id": "TUT_wind",
+  "name": "Tutorial: the moored sail",
+  "pond": {
+    "size": [
+      20,
+      12
+    ],
+    "banks": [
+      [
+        [
+          0,
+          0
+        ],
+        [
+          20,
+          0
+        ],
+        [
+          20,
+          12
+        ],
+        [
+          0,
+          12
+        ]
+      ]
+    ],
+    "phi": 0.0,
+    "phi_drift": 0.0
+  },
+  "obstacles": [],
+  "gates": [],
+  "start": {
+    "pos": [
+      10,
+      5.2
+    ],
+    "heading": 0.0
+  },
+  "boat": "tin_tug",
+  "display": {
+    "field_arrow": false,
+    "coils": false,
+    "ring": false
+  },
+  "tutorial": {
+    "tolerance_deg": 20,
+    "beats_needed": 4,
+    "ring_radius": 1.7,
+    "stages": [
+      {
+        "name": "Straight",
+        "turn_deg": 0,
+        "hint": [
+          "The wind turns once per beat: the dot shows where it is blowing. The boat is moored.",
+          "Hold Space to raise the sail while the dot is in the green; let go when it enters the red.",
+          "Do it on every turn: the arrow shows the push you get, towards the middle of the green."
+        ]
+      },
+      {
+        "name": "Left",
+        "turn_deg": 90,
+        "hint": [
+          "The green has moved to the left. The wind gets there a quarter turn earlier.",
+          "Raise the sail earlier, while the dot is in the green: the boat is pushed to the left.",
+          "Shifting the beat is how you steer."
+        ]
+      },
+      {
+        "name": "Right",
+        "turn_deg": -90,
+        "hint": [
+          "The green has moved to the right. The wind gets there a quarter turn later.",
+          "Raise the sail later, while the dot is in the green."
+        ]
+      }
+    ],
+    "done": [
+      "That is all there is to sailing here. Press 1 for the first course."
+    ],
+    "min_strength": 0.15
+  }
+}

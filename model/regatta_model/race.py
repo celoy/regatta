@@ -19,6 +19,7 @@ over a step, so the stop starts and ends on the step grid.
 from __future__ import annotations
 
 import json
+import math
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -177,8 +178,8 @@ class Race:
         self.p = p.with_(phi=course.phi)
         self.course = course
         self.radius = boat_radius
-        s = rest_state(self.p, course.start_heading)
-        self.z = np.concatenate([s, course.start_pos])
+        self.z = self._initial_state()
+        self.moored = False  # True: the boat turns (or feels the wind) but does not move
         self.n = 0
         self.u = 0.0
         self.stop_timer = 0.0
@@ -188,6 +189,25 @@ class Race:
         self.collisions = 0
         self.timeline: list[tuple[float, int]] = []  # recorded input (time, state)
         self._pending: deque[tuple[float, int]] = deque()
+
+    # The dynamics live in the next three methods; a subclass replaces them and keeps the
+    # heading in z[2] and the position in z[4:6].
+
+    def _initial_state(self) -> np.ndarray:
+        return np.concatenate(
+            [rest_state(self.p, self.course.start_heading), self.course.start_pos]
+        )
+
+    def _advance(self, t: float, z: np.ndarray, h: float, speed: float) -> np.ndarray:
+        return boat_step(self.p, t, z, self.u, h, speed)
+
+    def _on_hit(self, z: np.ndarray) -> None:
+        """Called after the boat was pushed out of a bank or obstacle."""
+
+    @property
+    def steer(self) -> tuple[float, float]:
+        """Vector whose beat average says where the boat is going (used by the drill)."""
+        return math.cos(self.heading), math.sin(self.heading)
 
     @property
     def t(self) -> float:
@@ -221,19 +241,19 @@ class Race:
         self._pending.append((t, int(state)))
 
     def step(self) -> None:
-        p, dt = self.p, self.p.dt
+        dt = self.p.dt
         t, t_next = self.t, (self.n + 1) * dt
-        speed = 0.0 if self.stop_timer > 0.0 else 1.0
+        speed = 0.0 if self.stop_timer > 0.0 or self.moored else 1.0
         z = self.z
         p0 = z[4:6].copy()
         while self._pending and self._pending[0][0] < t_next:
             te, state = self._pending.popleft()
             if te > t:
-                z = boat_step(p, t, z, self.u, te - t, speed)
+                z = self._advance(t, z, te - t, speed)
                 t = te
             self.u = float(state)
             self.timeline.append((te, state))
-        z = boat_step(p, t, z, self.u, t_next - t, speed)
+        z = self._advance(t, z, t_next - t, speed)
         self.n += 1
         if self.stop_timer > 0.0:
             self.stop_timer = max(0.0, self.stop_timer - dt)
@@ -241,6 +261,7 @@ class Race:
         pos, hit = push_out(self.course, z[4:6].copy(), self.radius)
         if hit:
             z[4:6] = pos
+            self._on_hit(z)
             if self.stop_timer == 0.0:
                 self.collisions += 1
             self.stop_timer = STOP_TIME

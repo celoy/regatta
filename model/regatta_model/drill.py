@@ -21,6 +21,13 @@ from typing import Any
 
 from .params import Params
 from .race import Course, Race
+from .wind import WindParams, WindRace
+
+
+def make_race(p: Params | WindParams, course: Course, boat_radius: float) -> Race:
+    """The race that goes with the parameter type: magnet boat or wind boat."""
+    cls = WindRace if isinstance(p, WindParams) else Race
+    return cls(p, course, boat_radius)
 
 
 def wrap(a: float) -> float:
@@ -34,32 +41,41 @@ class Stage:
     hint: list[str] = field(default_factory=list)
 
 
-def load_stages(d: dict[str, Any]) -> tuple[list[Stage], float, int]:
+def load_stages(d: dict[str, Any]) -> tuple[list[Stage], float, int, float]:
     """Stages, tolerance (rad) and beats needed, from the `tutorial` block of a course."""
     stages = [
         Stage(s["name"], math.radians(s["turn_deg"]), list(s.get("hint", []))) for s in d["stages"]
     ]
-    return stages, math.radians(d["tolerance_deg"]), int(d["beats_needed"])
+    return (
+        stages,
+        math.radians(d["tolerance_deg"]),
+        int(d["beats_needed"]),
+        float(d.get("min_strength", 0.0)),
+    )
 
 
 class Drill:
     def __init__(
         self,
-        p: Params,
+        p: Any,
         course: Course,
         boat_radius: float,
         stages: list[Stage],
         tolerance: float,
         beats_needed: int,
+        min_strength: float = 0.0,
     ) -> None:
-        self.race = Race(p.with_(v=0.0), course, boat_radius)  # moored
+        self.race = make_race(p, course, boat_radius)
+        self.race.moored = True
         self.stages = stages
         self.tolerance = tolerance
         self.beats_needed = beats_needed
+        self.min_strength = min_strength  # wind boat: least mean speed / v_max that counts
         self.stage = 0
         self.target = course.start_heading + stages[0].turn
         self.streak = 0
-        self.error = math.nan  # beat-averaged heading minus target, last beat
+        self.error = math.nan  # beat-averaged direction minus target, last beat
+        self.strength = 0.0  # length of the beat-averaged steer vector, last beat
         self.passed_at: list[float] = []  # time at which each stage was passed
         self._sin = self._cos = 0.0
         self._u = 0.0
@@ -78,17 +94,20 @@ class Drill:
         if race.u and not self._u:
             self._last_press = race.t
         self._u = race.u
-        self._sin += math.sin(race.heading)
-        self._cos += math.cos(race.heading)
+        c, s = race.steer
+        self._cos += c
+        self._sin += s
         if race.n % race.p.steps_per_beat:
             return
         mean = math.atan2(self._sin, self._cos)
+        self.strength = math.hypot(self._sin, self._cos) / race.p.steps_per_beat
         self._sin = self._cos = 0.0
         if self.done:
             return
         self.error = wrap(mean - self.target)
         pressed = race.t - self._last_press < 1.5 * race.p.period
-        self.streak = self.streak + 1 if abs(self.error) <= self.tolerance and pressed else 0
+        on_target = abs(self.error) <= self.tolerance and self.strength >= self.min_strength
+        self.streak = self.streak + 1 if on_target and pressed else 0
         if self.streak >= self.beats_needed:
             self.passed_at.append(race.t)
             self.stage += 1
@@ -97,9 +116,8 @@ class Drill:
                 self.target += self.stages[self.stage].turn
 
 
-def load_drill(p: Params, course: Course, boat_radius: float) -> Drill:
-    stages, tolerance, beats = load_stages(course.raw["tutorial"])
-    return Drill(p, course, boat_radius, stages, tolerance, beats)
+def load_drill(p: Any, course: Course, boat_radius: float) -> Drill:
+    return Drill(p, course, boat_radius, *load_stages(course.raw["tutorial"]))
 
 
 def is_tutorial(course: Course) -> bool:

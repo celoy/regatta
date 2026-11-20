@@ -1,0 +1,10 @@
+# Wind boat (prototype, 2026-11-20): a sail in a wind that turns once per beat.
+# Model and derived results: model/regatta_model/wind.py.
+
+wind_hz = 0.75           # the wind turns once per beat (45 beats per minute, as the field)
+tau = 0.5                # hull response time m / c, s: how fast the boat follows a new hold
+v_max = 3.534            # speed in a steady wind with the sail up; mean speed with perfect
+                         # half-beat holds is v_max / pi = 1.125 units/s, as the magnet boat
+windage = 0.0            # wind force with the sail down / with it up (0: bare hull feels nothing)
+steps_per_second = 480   # dt = 1 / steps_per_second
+phi_deg = 0.0            # wind direction at t = 0 (each course sets its own phi)
