@@ -41,7 +41,7 @@ from regatta_model.params import Params, load_params
 from regatta_model.race import Course, Race, clearance, load_boat, load_course
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE_PARAMS = ROOT / "toy" / "params" / "candidate_r_rotating.toml"
+BASE_PARAMS = ROOT / "toy" / "params" / "game.toml"
 DEG = np.pi / 180.0
 ON_COURSE_TOL = 15 * DEG
 MIN_GAP = 0.03  # s, shortest hold and shortest gap between holds

@@ -1,11 +1,12 @@
 """Magnet Regatta toy viewer (pygame-ce): play the one-button race on the test courses.
 
-    .venv/bin/python toy/viewer.py                     # course T01, its boat
+    .venv/bin/python toy/viewer.py                     # the tutorial (moored boat)
+    .venv/bin/python toy/viewer.py --course T01        # first course, its boat
     .venv/bin/python toy/viewer.py --course T03 --boat barge
 
 Keys: Space the button (hold = magnet swung to one side), P pause (resumes after a
 one-beat count-in), R restart, G ghost of the best run, S screenshot, L reload parameters,
-courses and boats from their files, 1-3 test courses, B cycle boats, Esc quit.
+courses and boats from their files, 0 tutorial, 1-3 test courses, B cycle boats, Esc quit.
 
 How to steer: the field turns once per beat. The aim dial (right) has a hand that points
 where a press made now (held for half a beat) would send the boat. Press every beat when
@@ -23,6 +24,7 @@ Headless check (no window): SDL_VIDEODRIVER=dummy and --frames N --fixed-fps 60
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import sys
@@ -34,12 +36,13 @@ import numpy as np
 import pygame
 
 from regatta_model import analysis as an
+from regatta_model.drill import Drill, is_tutorial, load_drill
 from regatta_model.params import Params, load_params
 from regatta_model.race import Boat, Course, Race, load_boat, load_course
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE_PARAMS = ROOT / "toy" / "params" / "candidate_r_rotating.toml"
-COURSES = ["T01", "T02", "T03"]
+BASE_PARAMS = ROOT / "toy" / "params" / "game.toml"
+COURSES = ["TUT", "T01", "T02", "T03"]  # keys 0-3
 RUNS = ROOT / "runs" / "toy"
 
 PAPER = (243, 236, 218)
@@ -85,7 +88,11 @@ class Viewer:
     def load(self) -> None:
         p, self.course, self.boat = load_setup(self.course_id, self.boat_id)
         self.boat_id = self.boat.id
-        self.race = Race(p, self.course, self.boat.radius)
+        # tutorial courses run a drill on a moored boat instead of a race
+        self.drill: Drill | None = (
+            load_drill(p, self.course, self.boat.radius) if is_tutorial(self.course) else None
+        )
+        self.race = self.drill.race if self.drill else Race(p, self.course, self.boat.radius)
         self.p = self.race.p
         self.h0 = an.heading_offset(self.p)  # heading = h0 - (field phase at hold centre)
         # what the course shows (tutorial courses hide the field and add the aim ring)
@@ -98,7 +105,8 @@ class Viewer:
         self.state = "countin"
         self.countin_left = self.p.period
         self.message = ""
-        if self.args.bot:
+        self.bot = None
+        if self.args.bot and self.drill is None:
             sys.path.insert(0, str(ROOT / "tools"))
             import bots  # noqa: PLC0415
 
@@ -109,7 +117,15 @@ class Viewer:
             self.bot_last_off = -np.inf
 
     def best_path(self) -> Path:
-        return RUNS / f"best_{self.course.id}_{self.boat.id}.json"
+        """One best run per course, boat and exact set-up (parameters, gates, banks).
+
+        A timeline only replays under the set-up it was recorded with, so the file name
+        carries a hash of it; runs made before a parameter change are kept and not used.
+        """
+        c = self.course
+        setup = repr((self.p, c.start_pos, c.start_heading, c.gates, c.banks, c.circles))
+        sig = hashlib.sha1(setup.encode()).hexdigest()[:8]
+        return RUNS / f"best_{c.id}_{self.boat.id}_{sig}.json"
 
     def read_best(self) -> dict | None:
         try:
@@ -164,8 +180,8 @@ class Viewer:
         elif k == pygame.K_b:
             self.boat_id = self.boats[(self.boats.index(self.boat_id) + 1) % len(self.boats)]
             self.load()
-        elif k in (pygame.K_1, pygame.K_2, pygame.K_3):
-            self.course_id = COURSES[k - pygame.K_1]
+        elif k in (pygame.K_0, pygame.K_1, pygame.K_2, pygame.K_3):
+            self.course_id = COURSES[k - pygame.K_0]
             self.boat_id = None
             self.load()
         elif k == pygame.K_s:
@@ -203,6 +219,8 @@ class Viewer:
             if self.bot is not None:
                 self.bot_step()
             race.step()
+            if self.drill is not None:
+                self.drill_step()
             if race.n % 8 == 0:
                 self.alpha_hist.append((race.t, race.magnet - race.heading))
                 self.head_hist.append((race.t, race.heading))
@@ -276,7 +294,9 @@ class Viewer:
         if self.ghost is not None and self.show_ghost:
             self.draw_boat(screen, self.ghost, ghost=True)
         self.draw_boat(screen, self.race)
-        if self.display["ring"]:
+        if self.drill is not None:
+            self.draw_drill(screen, t)
+        elif self.display["ring"]:
             self.draw_ring(screen, t)
         for i, line in enumerate(self.display["hint"]):
             self.text(screen, line, (ORIGIN[0] + 12, ORIGIN[1] + 8 + 20 * i), self.small, BLUE)
@@ -401,6 +421,62 @@ class Viewer:
         if race.stop_timer > 0:
             pygame.draw.circle(screen, RED, mid, round(0.6 * SCALE), 1)
 
+    def drill_step(self) -> None:
+        drill = self.drill
+        stage = drill.stage
+        drill.update()
+        if drill.stage != stage:
+            self.message = f"{drill.stages[stage].name}: done"
+
+    def draw_drill(self, screen, t: float) -> None:
+        """Moored boat: ring with a green part (press while the dot is there) and a red part.
+
+        The dot sits at the heading a press made now would give, so the green part, centred
+        on the target heading and as wide as the tolerance, is both where to press and where
+        the boat will point. Pips under the ring count the beats held on target.
+        """
+        drill, race = self.drill, self.race
+        tut = self.course.raw["tutorial"]
+        radius = tut.get("ring_radius", 1.5)
+        pos = race.pos
+
+        def on_ring(angle, r=radius):
+            return self.to_screen(pos + r * np.array([math.cos(angle), math.sin(angle)]))
+
+        def band(a0, a1, colour):
+            n = max(2, int(abs(a1 - a0) / math.radians(3)))
+            outer = [on_ring(a0 + (a1 - a0) * k / n, radius + 0.09) for k in range(n + 1)]
+            inner = [on_ring(a0 + (a1 - a0) * k / n, radius - 0.09) for k in range(n + 1)]
+            pygame.draw.polygon(screen, colour, outer + inner[::-1])
+
+        if drill.done:
+            band(0.0, 2 * math.pi, GREEN)
+            lines, title = tut.get("done", []), "Done"
+        else:
+            tol = drill.tolerance
+            band(drill.target + tol, drill.target - tol + 2 * math.pi, RED)
+            band(drill.target - tol, drill.target + tol, GREEN)
+            stage = drill.current
+            lines = stage.hint
+            title = f"{drill.stage + 1}/{len(drill.stages)}  {stage.name}"
+        if race.u and race.timeline:  # arc swept by the dot since the press
+            a0, a1 = self.aim_angle(race.timeline[-1][0]), self.aim_angle(t)
+            arc = [on_ring(a0 + (a1 - a0) * k / 24, radius - 0.28) for k in range(25)]
+            pygame.draw.lines(screen, BLUE, False, arc, 4)
+        dot = on_ring(self.aim_angle(t))
+        pygame.draw.circle(screen, PAPER, dot, 12)
+        pygame.draw.circle(screen, BLUE, dot, 10)
+        x, y = ORIGIN[0] + 16, ORIGIN[1] + 12
+        self.text(screen, title, (x, y), self.font)
+        for i, line in enumerate(lines):
+            self.text(screen, line, (x, y + 30 + 22 * i), self.small, BLUE)
+        if not drill.done:  # pips: beats held on target
+            cx, cy = self.to_screen(pos - np.array([0.0, radius + 0.6]))
+            for i in range(drill.beats_needed):
+                c = (cx + 26 * (i - 0.5 * (drill.beats_needed - 1)), cy)
+                pygame.draw.circle(screen, GREEN if i < drill.streak else PAPER, c, 8)
+                pygame.draw.circle(screen, INK, c, 8, 1)
+
     def aim_angle(self, t: float) -> float:
         """Heading that a press made at time t (held half a beat) settles on."""
         return self.h0 - self.p.omega * t - 0.5 * math.pi
@@ -439,8 +515,10 @@ class Viewer:
         race = self.race
         clock = race.finish_time if race.finished else race.t
         self.text(screen, f"{self.course.id}  {self.course.name}", (40, 22))
-        self.text(screen, f"{clock:6.2f} s", (300, 14), self.big)
-        info = f"gate {min(race.next_gate + 1, len(self.course.gates))}/{len(self.course.gates)}"
+        if self.drill is None:  # the drill is not timed
+            self.text(screen, f"{clock:6.2f} s", (300, 14), self.big)
+        n_gates = len(self.course.gates)
+        info = f"gate {min(race.next_gate + 1, n_gates)}/{n_gates}" if n_gates else ""
         if self.course.par:
             info += f"   par {self.course.par:.1f} s"
         if self.best:
@@ -472,6 +550,7 @@ class Viewer:
             "G ghost",
             "S screenshot",
             "L reload",
+            "0 tutorial",
             "1-3 course",
             "B boat",
             "Esc quit",
@@ -505,9 +584,12 @@ class Viewer:
 
         race = self.race
         gates = self.course.gates
-        a, b = gates[min(race.next_gate, len(gates) - 1)]
-        d = 0.5 * (a + b) - race.pos
-        ray(math.atan2(d[1], d[0]), DIAL_R, RED, 2)  # bearing to the next gate
+        if gates:
+            a, b = gates[min(race.next_gate, len(gates) - 1)]
+            d = 0.5 * (a + b) - race.pos
+            ray(math.atan2(d[1], d[0]), DIAL_R, RED, 2)  # bearing to the next gate
+        elif self.drill is not None and not self.drill.done:
+            ray(self.drill.target, DIAL_R, GREEN, 2)  # the drill's target heading
         ray(race.heading, 0.6 * DIAL_R, INK, 4)  # boat heading
         ray(self.aim_angle(t), 0.95 * DIAL_R, BLUE, 2)
         pygame.draw.circle(screen, INK, DIAL_C, 4)
@@ -559,7 +641,7 @@ class Viewer:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--course", default="T01", choices=COURSES)
+    ap.add_argument("--course", default="TUT", choices=COURSES)
     ap.add_argument("--boat", default=None)
     ap.add_argument("--frames", type=int, default=0, help="quit after N frames (0: never)")
     ap.add_argument("--fixed-fps", type=float, default=0.0, help="advance 1/F s per frame")

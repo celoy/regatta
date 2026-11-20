@@ -16,15 +16,13 @@
   ],
   "start": {"pos": [1.5, 6], "heading": 0.0},
   "boat": "tin_tug",
-  "par": 10.83,
+  "par": 14.44,
   "display": {
     "field_arrow": false,
     "coils": false,
     "ring": true,
     "hint": [
-      "The dot turns round the boat once per beat.",
-      "Press Space when the dot reaches the bow mark, and hold it for about half a turn.",
-      "Do it every turn and the boat goes straight. Press earlier or later to turn."
+      "Press when the dot reaches the bow mark to go straight; earlier to turn left, later to turn right."
     ]
   }
 }

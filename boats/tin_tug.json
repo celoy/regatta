@@ -1,15 +1,15 @@
 {
   "id": "tin_tug",
   "name": "Tin tug",
-  "note": "Candidate R of Phase 1: answers a 90 deg shift in about 2 beats; 9 deg heading scatter at 40 ms jitter.",
+  "note": "Candidate R of Phase 1: answers a 90 deg shift in about 2 beats; 9 deg heading scatter at 40 ms jitter. Rates scaled to the 0.75 Hz beat (hull damping and speed times 0.75).",
   "radius": 0.3,
   "params": {
     "omega_over_omega0": 2.0,
-    "hull_damping": 3.0,
+    "hull_damping": 2.25,
     "inertia_ratio": 0.2,
     "alpha0_deg": 65.0,
     "omega_s_over_omega": 4.0,
     "zeta": 0.5,
-    "v": 1.5
+    "v": 1.125
   }
 }

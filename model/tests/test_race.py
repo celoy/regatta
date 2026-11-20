@@ -8,6 +8,7 @@ import pytest
 from regatta_model import analysis as an
 from regatta_model import dynamics as dyn
 from regatta_model import theory as th
+from regatta_model.drill import Drill, load_drill
 from regatta_model.params import Params, load_params
 from regatta_model.race import (
     Course,
@@ -27,7 +28,7 @@ DEG = np.pi / 180.0
 @pytest.fixture(scope="module")
 def pr() -> Params:
     boat = load_boat(ROOT / "boats" / "tin_tug.json")
-    return load_params(ROOT / "toy" / "params" / "candidate_r_rotating.toml", boat.params)
+    return load_params(ROOT / "toy" / "params" / "game.toml", boat.params)
 
 
 def make_course(gates, obstacles=(), islands=(), start=(1.5, 6.0), heading=0.0) -> Course:
@@ -80,10 +81,11 @@ def test_6a_gates_counted_once_and_in_order(pr: Params) -> None:
     gates = [((8, 5), (8, 7)), ((4, 5), (4, 7)), ((12, 5), (12, 7))]
     race = Race(pr, make_course(gates), 0.3)
     press_for_heading(race, 0.0, 20, an.heading_offset(race.p))
-    race.run_until(12.0)
+    v = race.p.v
+    race.run_until(18.0 / v)  # 18 units of travel from x = 1.5
     assert race.next_gate == 1  # gate 0 only: gate 1 (x = 4) was passed before gate 0
     assert len(race.gate_times) == 1
-    assert 4.0 < race.gate_times[0] < 6.0  # x = 8 reached after about 6.5 / 1.5 s
+    assert 6.0 / v < race.gate_times[0] < 9.0 / v  # x = 8 is 6.5 units from the start
 
 
 def test_6b_gate_crossed_back_and_forth_counts_once(pr: Params) -> None:
@@ -145,9 +147,10 @@ def test_push_out_from_inside_obstacles() -> None:
 def test_replay_reproduces_a_race(pr: Params) -> None:
     course = load_course(ROOT / "courses" / "T01.json")
     race = Race(pr, course, 0.3)
-    press_for_heading(race, 0.0, 15, an.heading_offset(race.p))
-    race.run_until(14.0)
-    again = replay(pr, course, 0.3, race.timeline, 14.0)
+    t_end = 21.0 / race.p.v  # 15.5 units to the last gate, with margin
+    press_for_heading(race, 0.0, int(t_end / race.p.period) + 1, an.heading_offset(race.p))
+    race.run_until(t_end)
+    again = replay(pr, course, 0.3, race.timeline, t_end)
     assert np.array_equal(again.z, race.z)
     assert again.gate_times == race.gate_times and race.finished
 
@@ -159,3 +162,46 @@ def test_courses_and_boats_load() -> None:
         assert clearance(course, course.start_pos) > 0.3
         for a, b in course.gates:
             assert clearance(course, 0.5 * (a + b)) > 0.3
+
+
+# --- tutorial drill ---------------------------------------------------------------------
+
+
+def tutorial_drill(pr: Params) -> Drill:
+    course = load_course(ROOT / "courses" / "TUT.json")
+    return load_drill(pr, course, 0.3)
+
+
+def test_drill_passes_with_presses_on_the_target(pr: Params) -> None:
+    """Pressing when the aim (h0 - omega t - pi/2) equals the target passes every stage."""
+    drill = tutorial_drill(pr)
+    race, p = drill.race, drill.race.p
+    h0 = an.heading_offset(p)
+    start = race.pos.copy()
+    t_off = 0.0
+    while not drill.done and race.t < 40 * p.period:
+        if race.n % p.steps_per_beat == 0:  # one press per beat, where the aim meets the target
+            wait = np.mod((h0 - 0.5 * np.pi - drill.target) / p.omega - race.t, p.period)
+            t_on = max(race.t + wait, t_off + 0.05)
+            t_off = t_on + 0.5 * p.period
+            race.set_button(t_on, 1)
+            race.set_button(t_off, 0)
+        race.step()
+        drill.update()
+    assert drill.done
+    assert np.array_equal(race.pos, start)  # moored
+    # 3 beats on target per stage, plus about 2 beats to turn 90 degrees
+    assert drill.passed_at[-1] <= 20 * p.period
+    assert abs(drill.error) < 10 * DEG
+
+
+@pytest.mark.parametrize("held", [0, 1])
+def test_drill_does_not_pass_without_rhythm(pr: Params, held: int) -> None:
+    """The idle boat circles through the target; it must not pass a stage."""
+    drill = tutorial_drill(pr)
+    race = drill.race
+    race.set_button(0.0, held)
+    while race.t < 60 * race.p.period:
+        race.step()
+        drill.update()
+    assert drill.stage == 0

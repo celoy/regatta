@@ -21,6 +21,7 @@ Working title "Magnet Regatta" (not cleared, see Open questions). This file is t
 - 2026-11-19: Phase 1 third pass, rotating field tried at Chris's request (new parameter field_ellipticity; 0 keeps the brief's field). Result: the press phase sets the heading degree for degree; candidate R (rotating, omega/omega0 = 2, alpha0 = 65°, hull damping 3 /s) turns 90° in 2 beats, 9° heading scatter at 40 ms jitter, idle boat circles at 13° per beat, no chaos. 15 tests pass. Awaiting Chris's choice between R and A; R contradicts three Decisions entries (listed in docs/phase1_report.md), not changed.
 - 2026-11-19: Chris chose R; Decisions and dependent brief sections updated for the rotating field. Phase 2 built: race model, test courses T01-T03 (par 10.83, 23.56, 22.56 s), boats tin_tug and barge, bots, pygame viewer with aim dial, test 6; 23 tests pass. Fun hypothesis: jitter gradient, 3-beat turn and time cost of jitter pass; naive-bot hypothesis fails in substance (bot artefact). Report docs/phase2_report.md. Awaiting Gate B: Chris plays.
 - 2026-11-20: T01 made a tutorial at Chris's request: open water (wide gates), no field arrow or coils, aim ring round the boat with a dot turning once per beat and a bow mark, three-line hint; optional `display` block in the course file. 23 tests pass. Still awaiting Gate B.
+- 2026-11-20: after Chris played (T01 in 92 s at 1 Hz, rhythm not held): beat slowed to 0.75 Hz by time rescaling (toy/params/game.toml; new pars 14.44, 29.97, 30.18 s); moored-boat tutorial added (courses/TUT.json, model drill.py: green/red ring, stages straight, left, right). 26 tests pass. Awaiting Gate B on the new version.
 
 ## Deadline and jam
 
@@ -90,7 +91,7 @@ Derived results to check numerically (state them in docstrings):
 
 Integration: RK4 at dt = 1/480 s for (theta_m, theta_m', theta_h, theta_h'). Resolve both the field period and the tiller period with at least 40 steps each.
 
-Default parameters (the original guesses, kept in toy/params/default.toml for the Phase 1 tests; params in TOML for the toy, JSON for Godot). The game uses candidate R (toy/params/candidate_r_rotating.toml): e = 1, omega0 = omega / 2, gamma / (I_m + I_h) = 3.0 1/s, alpha0 = 65°, the rest as below.
+Default parameters (the original guesses, kept in toy/params/default.toml for the Phase 1 tests; params in TOML for the toy, JSON for Godot). The game uses candidate R (toy/params/candidate_r_rotating.toml): e = 1, omega0 = omega / 2, gamma / (I_m + I_h) = 3.0 1/s, alpha0 = 65°, the rest as below; since 2026-11-20 with every rate times 0.75 (toy/params/game.toml: beat 0.75 Hz, damping 2.25 1/s, v = 1.125).
 
 | Name | Default | Note |
 |---|---|---|
@@ -115,7 +116,7 @@ Sweeps (headless, CSV outputs), Phase 1:
 4. Tack: a half-beat shift from a locked state; beats until relocked on the opposite heading.
 5. Reaction check: field off, periodic presses; net hull rotation over 100 beats (should be zero).
 
-Toy viewer, Phase 2: top view of the pond, two coil pairs on the banks pulsing in quadrature, the field drawn as an arrow turning once per beat, boat with the magnet visible on its pivot, wake trail, gates. Beat indicator: field phase and tiller stroke on one strip, and the aim dial. Lock meter (heading spread over the last beat). Keys: Space (the button), P pause, R restart, G ghost, S screenshot, L reload parameters, 1–3 test courses, B cycle boats.
+Toy viewer, Phase 2: top view of the pond, two coil pairs on the banks pulsing in quadrature, the field drawn as an arrow turning once per beat, boat with the magnet visible on its pivot, wake trail, gates. Beat indicator: field phase and tiller stroke on one strip, and the aim dial. Lock meter (heading spread over the last beat). Keys: Space (the button), P pause, R restart, G ghost, S screenshot, L reload parameters, 0 tutorial, 1–3 test courses, B cycle boats. Tutorial (courses/TUT.json, added 2026-11-20): a moored boat that turns without moving, inside a ring with a green part at the target heading and a red part elsewhere; a dot goes round once per beat and the player presses while it is in the green. Three stages: straight, left, right.
 
 Bots (tools/bots.py), Phase 2:
 - Rhythm bot: presses at the field frequency with chosen phase and duty cycle; Gaussian timing jitter sigma.
@@ -223,7 +224,7 @@ Cut list, in this order: field-drift ponds; resonant boat; best-run ghost; Audio
 - The pond's field rotates at the beat frequency (two coil pairs in quadrature; phi per pond); the boat's heading comes from its own magnet; with a still tiller the boat circles slowly. (Changed 2026-11-19 after Phase 1: the oscillating field with a tumbling idle boat was dropped because the press phase cannot set the heading in it.)
 - One button. The magnetic tiller is a torsional spring between magnet and hull; holding the button applies a constant torque to one side, the spring returns it on release.
 - The press phase sets the heading, degree for degree (a half-beat shift turns the boat 180°); the duty cycle only trims; timing error becomes heading error; playing off tempo makes the boat turn steadily. (Changed 2026-11-19 after Phase 1; replaces "phase picks the tack, duty cycle steers, losing the tempo returns the boat to chaos".)
-- Parameter set: candidate R (toy/params/candidate_r_rotating.toml: rotating field, omega/omega0 = 2, alpha0 = 65°, hull damping 3 /s). Chosen 2026-11-19.
+- Parameter set: candidate R (toy/params/candidate_r_rotating.toml: rotating field, omega/omega0 = 2, alpha0 = 65°, hull damping 3 /s). Chosen 2026-11-19. Beat slowed from 1 Hz to 0.75 Hz at Chris's request on 2026-11-20, as a pure time rescaling (hull damping 2.25 /s, boat speed 1.125 units/s; toy/params/game.toml and the boat files), so the behaviour per beat is unchanged.
 - One boat on the water at a time; constant boat speed; the field orients and never pushes.
 - Boats differ by tiller spring, magnet and inertia; the first boat is stiff and crisp (default, open to change).
 - Python twin first (model, tests, sweeps, bots), then GDScript port checked against golden files.

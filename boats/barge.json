@@ -1,15 +1,15 @@
 {
   "id": "barge",
   "name": "Barge",
-  "note": "Weaker magnet and shorter tiller: steadier (7 deg scatter at 40 ms) but slower to answer (about 4 beats for 90 deg). Phase 1 response sweep, omega/omega0 = 2.5, alpha0 = 50 deg.",
+  "note": "Weaker magnet and shorter tiller: steadier (7 deg scatter at 40 ms) but slower to answer (about 4 beats for 90 deg). Phase 1 response sweep, omega/omega0 = 2.5, alpha0 = 50 deg. Rates scaled to the 0.75 Hz beat (hull damping and speed times 0.75).",
   "radius": 0.35,
   "params": {
     "omega_over_omega0": 2.5,
-    "hull_damping": 3.0,
+    "hull_damping": 2.25,
     "inertia_ratio": 0.2,
     "alpha0_deg": 50.0,
     "omega_s_over_omega": 4.0,
     "zeta": 0.5,
-    "v": 1.5
+    "v": 1.125
   }
 }

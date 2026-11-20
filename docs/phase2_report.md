@@ -108,6 +108,26 @@ For the game this matters less than it looks, because the aim dial gives the pla
 - **Course format:** a new optional `display` block in the course file (`field_arrow`, `coils`, `ring`, `hint`); courses without it look as before.
 - **Check:** a scripted player that only follows the hint (press as the dot crosses the bow mark, release half a beat later) finishes T01 in 11.1 s without timing error, 10.9–11.0 s at 20 ms, 11.1–11.3 s at 40 ms (3 seeds each). At 80 ms it gets lost in 2 of 3 runs: following the bow holds whatever heading the boat has and never corrects back towards the gates.
 
+## Slower beat and moored-boat tutorial (2026-11-20, after Chris played)
+
+Chris's first run of T01 (kept in `runs/toy/best_T01_tin_tug.json`, old 1 Hz beat) took 92.5 s against a par of 10.8 s. He pressed about once per beat (median interval 1.02 s), but only 34 % of the intervals were within 10 % of a beat (10th to 90th percentile 0.75 to 1.33 s), and the press phase was spread uniformly round the beat. So the rhythm itself was not held, with no sound and no instruction.
+
+**Slower beat.** The beat goes from 1 Hz to 0.75 Hz as a pure time rescaling: hull damping 3 to 2.25 /s and boat speed 1.5 to 1.125 units/s, with omega/omega0, alpha0, omega_s/omega and zeta unchanged. Game parameters are in `toy/params/game.toml`; `candidate_r_rotating.toml` stays as the Phase 1 record.
+
+- **Check:** the beat-by-beat heading of a 12-beat run matches the 1 Hz run to 0.02°, and h0 is the same (−23.46°).
+- **What changes:** everything takes 4/3 longer, and a timing error in ms is 3/4 as large a fraction of the beat (40 ms now gives the heading scatter that 30 ms gave).
+- **New pars** (run `runs/phase2/20261120-150148_bots`, each replays exactly): T01 14.44 s, T02 29.97 s, T03 30.18 s.
+- **Jitter cost, 120 ms / 20 ms:** T01 ×1.06, T02 ×1.91 (T02's best pilot now uses lead 0.3), T03 ×1.52. T01 no longer punishes jitter, because its gates are now nearly as wide as the pond; it is a first course, not a test of timing.
+- **Naive bot:** finishes T01 6/6 at every jitter now that the gates are wide (6 % slower than the pilot); on T02 it still orbits missed gates.
+
+**Tutorial** (`courses/TUT.json`, key 0, the viewer's default course). The boat is moored: it turns and does not move (v = 0). Round it is a ring with a green part, centred on the target heading and ±20° wide, and a red part elsewhere. A blue dot goes round once per beat at the heading a press made now would give, so the green part is both where to press and where the boat will point. Three stages: straight (target ahead), left (target +90°: press a quarter turn earlier), right (target −90°: press later). A stage is passed after 4 beats in a row with the beat-averaged heading inside the green and a press in the last 1.5 beats; pips under the ring count them. The field arrow, coils and race clock are hidden.
+
+- **Logic:** `model/regatta_model/drill.py`, with stages, tolerance and beats needed in the course file.
+- **Tests (3 new, 26 pass):** ideal presses on the target pass all three stages within 20 beats; a boat left alone, or with the button held down, never passes (it circles through the target at 13° per beat, which is why a press is required).
+- **Scripted player** (presses when the dot reaches the middle of the green): passes the stages at beats 4, 10, 16 at 0 and 40 ms of timing error; at 80 ms by beat 19 to 22; at 120 ms by beat 34 to 51.
+- **T01** keeps its ring and bow mark, with a one-line hint.
+- **Best runs:** the file name now carries a hash of the parameters and the course, since a timeline only replays under the set-up it was recorded with. Runs made before a change are kept and not used.
+
 ## Gate B, for Chris
 
 1. Play T01 to T03 with both boats.

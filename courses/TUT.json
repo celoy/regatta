@@ -1,0 +1,51 @@
+{
+  "id": "TUT",
+  "name": "Tutorial: the moored boat",
+  "pond": {
+    "size": [20, 12],
+    "banks": [[[0, 0], [20, 0], [20, 12], [0, 12]]],
+    "phi": 0.0,
+    "phi_drift": 0.0
+  },
+  "obstacles": [],
+  "gates": [],
+  "start": {"pos": [10, 5.2], "heading": 0.0},
+  "boat": "tin_tug",
+  "display": {"field_arrow": false, "coils": false, "ring": false},
+  "tutorial": {
+    "tolerance_deg": 20,
+    "beats_needed": 4,
+    "ring_radius": 1.7,
+    "stages": [
+      {
+        "name": "Straight",
+        "turn_deg": 0,
+        "hint": [
+          "The boat is moored: it turns but does not move. The dot goes round once per beat.",
+          "Press Space when the dot is in the green, hold for about half a turn, let go.",
+          "Do it on every turn: the boat points at the green and stays there."
+        ]
+      },
+      {
+        "name": "Left",
+        "turn_deg": 90,
+        "hint": [
+          "The green has moved to the left. The dot gets there a quarter turn earlier.",
+          "Press earlier, when the dot is in the green: the boat turns left.",
+          "Shifting the beat is how you steer."
+        ]
+      },
+      {
+        "name": "Right",
+        "turn_deg": -90,
+        "hint": [
+          "The green has moved to the right. The dot gets there a quarter turn later.",
+          "Press later, when the dot is in the green: the boat turns right."
+        ]
+      }
+    ],
+    "done": [
+      "That is all there is to steering. Press 1 for the first course."
+    ]
+  }
+}
