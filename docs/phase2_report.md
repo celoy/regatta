@@ -99,6 +99,15 @@ For the game this matters less than it looks, because the aim dial gives the pla
 - **Two of the brief's keys need the stored best run:** G and the ghost need a best run on disk, which exists only after a human finish.
 - **Audio:** the toy has none. A tick at each field reversal would probably help keep the rhythm when Chris plays. The brief puts audio in Phase 4; I did not add it.
 
+## T01 as a tutorial (2026-11-20, after Chris's first look)
+
+- **Open water:** the four gates span y = 1.5 to 10.5 instead of 5 to 7. The par timeline still replays to 10.83 s.
+- **Field hidden:** no field arrow and no coils on T01. The strip and the dial stay.
+- **Aim ring:** a circle round the boat with a blue dot that turns clockwise once per beat, at the heading a press made now would give (the dial's hand, moved onto the boat). A black mark on the ring shows the bow (heading averaged over the last beat). While the button is held, the arc the dot has swept since the press is drawn.
+- **Hint:** three lines at the top of the pond: press when the dot reaches the bow mark, hold about half a turn; every turn keeps the boat straight; earlier or later turns it.
+- **Course format:** a new optional `display` block in the course file (`field_arrow`, `coils`, `ring`, `hint`); courses without it look as before.
+- **Check:** a scripted player that only follows the hint (press as the dot crosses the bow mark, release half a beat later) finishes T01 in 11.1 s without timing error, 10.9–11.0 s at 20 ms, 11.1–11.3 s at 40 ms (3 seeds each). At 80 ms it gets lost in 2 of 3 runs: following the bow holds whatever heading the boat has and never corrects back towards the gates.
+
 ## Gate B, for Chris
 
 1. Play T01 to T03 with both boats.

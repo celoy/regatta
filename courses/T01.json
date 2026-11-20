@@ -2,83 +2,29 @@
   "id": "T01",
   "name": "Straight down the basin",
   "pond": {
-    "size": [
-      20,
-      12
-    ],
-    "banks": [
-      [
-        [
-          0,
-          0
-        ],
-        [
-          20,
-          0
-        ],
-        [
-          20,
-          12
-        ],
-        [
-          0,
-          12
-        ]
-      ]
-    ],
+    "size": [20, 12],
+    "banks": [[[0, 0], [20, 0], [20, 12], [0, 12]]],
     "phi": 0.0,
     "phi_drift": 0.0
   },
   "obstacles": [],
   "gates": [
-    {
-      "a": [
-        5,
-        5
-      ],
-      "b": [
-        5,
-        7
-      ]
-    },
-    {
-      "a": [
-        9,
-        5
-      ],
-      "b": [
-        9,
-        7
-      ]
-    },
-    {
-      "a": [
-        13,
-        5
-      ],
-      "b": [
-        13,
-        7
-      ]
-    },
-    {
-      "a": [
-        17,
-        5
-      ],
-      "b": [
-        17,
-        7
-      ]
-    }
+    {"a": [5, 1.5], "b": [5, 10.5]},
+    {"a": [9, 1.5], "b": [9, 10.5]},
+    {"a": [13, 1.5], "b": [13, 10.5]},
+    {"a": [17, 1.5], "b": [17, 10.5]}
   ],
-  "start": {
-    "pos": [
-      1.5,
-      6
-    ],
-    "heading": 0.0
-  },
+  "start": {"pos": [1.5, 6], "heading": 0.0},
   "boat": "tin_tug",
-  "par": 10.83
+  "par": 10.83,
+  "display": {
+    "field_arrow": false,
+    "coils": false,
+    "ring": true,
+    "hint": [
+      "The dot turns round the boat once per beat.",
+      "Press Space when the dot reaches the bow mark, and hold it for about half a turn.",
+      "Do it every turn and the boat goes straight. Press earlier or later to turn."
+    ]
+  }
 }

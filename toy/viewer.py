@@ -57,6 +57,8 @@ STRIP = pygame.Rect(40, 732, 1080, 112)
 PANEL_X = 1165
 DIAL_C, DIAL_R = (1218, 170), 50
 POLL_HZ, DRAW_HZ = 240, 60
+RING_R = 1.0  # aim ring radius round the boat, length units
+DISPLAY_DEFAULTS = {"field_arrow": True, "coils": True, "ring": False, "hint": []}
 
 
 def load_setup(course_id: str, boat_id: str | None) -> tuple[Params, Course, Boat]:
@@ -86,6 +88,8 @@ class Viewer:
         self.race = Race(p, self.course, self.boat.radius)
         self.p = self.race.p
         self.h0 = an.heading_offset(self.p)  # heading = h0 - (field phase at hold centre)
+        # what the course shows (tutorial courses hide the field and add the aim ring)
+        self.display = DISPLAY_DEFAULTS | self.course.raw.get("display", {})
         self.best = self.read_best()
         self.ghost = self.make_ghost()
         self.wake: deque[tuple[float, float]] = deque(maxlen=400)
@@ -272,6 +276,10 @@ class Viewer:
         if self.ghost is not None and self.show_ghost:
             self.draw_boat(screen, self.ghost, ghost=True)
         self.draw_boat(screen, self.race)
+        if self.display["ring"]:
+            self.draw_ring(screen, t)
+        for i, line in enumerate(self.display["hint"]):
+            self.text(screen, line, (ORIGIN[0] + 12, ORIGIN[1] + 8 + 20 * i), self.small, BLUE)
         self.draw_hud(screen)
         self.draw_dial(screen, t)
         self.draw_strip(screen, t)
@@ -305,13 +313,16 @@ class Viewer:
         e_phi = np.array([math.cos(p.phi), math.sin(p.phi)])
         e_perp = np.array([-e_phi[1], e_phi[0]])
         centre = np.array([w / 2, h / 2])
-        for axis, current in ((e_phi, along), (e_perp, across)):
-            reach = min(
-                abs(w / 2 / axis[0]) if axis[0] else 1e9, abs(h / 2 / axis[1]) if axis[1] else 1e9
-            )
-            for sign in (-1, 1):
-                self.draw_coil(screen, centre + sign * reach * axis, axis, current)
-        # the field arrow
+        if self.display["coils"]:
+            for axis, current in ((e_phi, along), (e_perp, across)):
+                reach = min(
+                    abs(w / 2 / axis[0]) if axis[0] else 1e9,
+                    abs(h / 2 / axis[1]) if axis[1] else 1e9,
+                )
+                for sign in (-1, 1):
+                    self.draw_coil(screen, centre + sign * reach * axis, axis, current)
+        if not self.display["field_arrow"]:
+            return
         a = self.field_angle(t)
         strength = math.hypot(along, across)
         tip = centre + 2.2 * strength * np.array([math.cos(a), math.sin(a)])
@@ -390,6 +401,37 @@ class Viewer:
         if race.stop_timer > 0:
             pygame.draw.circle(screen, RED, mid, round(0.6 * SCALE), 1)
 
+    def aim_angle(self, t: float) -> float:
+        """Heading that a press made at time t (held half a beat) settles on."""
+        return self.h0 - self.p.omega * t - 0.5 * math.pi
+
+    def draw_ring(self, screen, t: float) -> None:
+        """Ring round the boat: a dot turning with the aim, and a mark at the bow.
+
+        The dot sits at the heading a press made now would give, so pressing as it
+        passes the bow mark (beat-averaged heading) keeps the boat on its course.
+        While the button is held, the arc swept by the dot since the press is drawn.
+        """
+        race = self.race
+        pos = race.pos
+
+        def on_ring(angle, r=RING_R):
+            return self.to_screen(pos + r * np.array([math.cos(angle), math.sin(angle)]))
+
+        centre = self.to_screen(pos)
+        pygame.draw.circle(screen, FAINT, centre, round(RING_R * SCALE), 1)
+        last = [h for tt, h in self.head_hist if tt > race.t - self.p.period]
+        bow = math.atan2(np.mean(np.sin(last)), np.mean(np.cos(last))) if last else race.heading
+        tip = on_ring(bow, RING_R + 0.05)
+        base = [on_ring(bow + s * 0.12, RING_R + 0.35) for s in (-1, 1)]
+        pygame.draw.polygon(screen, INK, [tip, *base])
+        if race.u and race.timeline:
+            t_on = race.timeline[-1][0]
+            a0, a1 = self.aim_angle(t_on), self.aim_angle(t)
+            arc = [on_ring(a0 + (a1 - a0) * k / 24) for k in range(25)]
+            pygame.draw.lines(screen, BLUE, False, arc, 4)
+        pygame.draw.circle(screen, BLUE, on_ring(self.aim_angle(t)), 7)
+
     def text(self, screen, s: str, pos, font=None, colour=INK) -> None:
         screen.blit((font or self.font).render(s, True, colour), pos)
 
@@ -467,8 +509,7 @@ class Viewer:
         d = 0.5 * (a + b) - race.pos
         ray(math.atan2(d[1], d[0]), DIAL_R, RED, 2)  # bearing to the next gate
         ray(race.heading, 0.6 * DIAL_R, INK, 4)  # boat heading
-        aim = self.h0 - self.p.omega * t - 0.5 * math.pi
-        ray(aim, 0.95 * DIAL_R, BLUE, 2)
+        ray(self.aim_angle(t), 0.95 * DIAL_R, BLUE, 2)
         pygame.draw.circle(screen, INK, DIAL_C, 4)
 
     def draw_strip(self, screen, t: float) -> None:
