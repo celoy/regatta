@@ -40,7 +40,7 @@
   },
   "boat": "tin_tug",
   "display": {
-    "field_arrow": false,
+    "field_arrow": true,
     "coils": false,
     "ring": false
   },
@@ -53,8 +53,8 @@
         "name": "Straight",
         "turn_deg": 0,
         "hint": [
-          "The wind turns once per beat: the dot shows where it is blowing. The boat is moored.",
-          "Hold Space to raise the sail while the dot is in the green; let go when it enters the red.",
+          "The wind turns once per beat, and the blue dot goes round with it. The boat is moored.",
+          "Hold Space to raise the sail while the dot is in the green; let go while it is in the red.",
           "Do it on every turn: the arrow shows the push you get, towards the middle of the green."
         ]
       },
@@ -62,7 +62,7 @@
         "name": "Left",
         "turn_deg": 90,
         "hint": [
-          "The green has moved to the left. The wind gets there a quarter turn earlier.",
+          "The green has moved to the left. The dot gets there a quarter turn earlier.",
           "Raise the sail earlier, while the dot is in the green: the boat is pushed to the left.",
           "Shifting the beat is how you steer."
         ]
@@ -71,7 +71,7 @@
         "name": "Right",
         "turn_deg": -90,
         "hint": [
-          "The green has moved to the right. The wind gets there a quarter turn later.",
+          "The green has moved to the right. The dot gets there a quarter turn later.",
           "Raise the sail later, while the dot is in the green."
         ]
       }

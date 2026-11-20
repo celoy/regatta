@@ -2,9 +2,13 @@
 # Model and derived results: model/regatta_model/wind.py.
 
 wind_hz = 0.75           # the wind turns once per beat (45 beats per minute, as the field)
-tau = 0.5                # hull response time m / c, s: how fast the boat follows a new hold
-v_max = 3.534            # speed in a steady wind with the sail up; mean speed with perfect
-                         # half-beat holds is v_max / pi = 1.125 units/s, as the magnet boat
+tau = 1.0                # hull response time m / c, s: how fast the boat follows a new hold
+v_max = 4.31             # speed in a steady wind with the sail up. Perfect half-beat holds
+                         # give 0.82 v_max / pi = 1.125 units/s, the magnet boat's speed
+                         # (0.82: measured loss to the vane's lag; v_max / pi without vane)
 windage = 0.0            # wind force with the sail down / with it up (0: bare hull feels nothing)
+vane_ratio = 2.5         # sail as a vane with inertia: vane frequency / wind frequency (0: off)
+vane_zeta = 0.5          # vane damping ratio while the sail is up
+vane_coast = 3.0         # s, time over which the furled sail stops turning
 steps_per_second = 480   # dt = 1 / steps_per_second
 phi_deg = 0.0            # wind direction at t = 0 (each course sets its own phi)

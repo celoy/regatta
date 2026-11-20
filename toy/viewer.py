@@ -40,7 +40,7 @@ from regatta_model import analysis as an
 from regatta_model.drill import Drill, is_tutorial, load_drill, make_race
 from regatta_model.params import Params, load_params
 from regatta_model.race import Boat, Course, Race, load_boat, load_course
-from regatta_model.wind import WindParams, load_wind_params
+from regatta_model.wind import WindParams, hold_response, load_wind_params
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE_PARAMS = ROOT / "toy" / "params" / "game.toml"
@@ -107,7 +107,8 @@ class Viewer:
         self.race = self.drill.race if self.drill else make_race(p, self.course, self.boat.radius)
         self.p = self.race.p
         # magnet boat: heading = h0 - (field phase at hold centre)
-        self.h0 = 0.0 if self.wind else an.heading_offset(self.p)
+        # wind boat: course = wind direction at the middle of the hold + h0 (the vane's lag)
+        self.h0 = hold_response(self.p)[0] if self.wind else an.heading_offset(self.p)
         # what the course shows (tutorial courses hide the field and add the aim ring)
         self.display = DISPLAY_DEFAULTS | self.course.raw.get("display", {})
         if self.wind:
@@ -447,16 +448,17 @@ class Viewer:
             return
         pygame.draw.polygon(screen, PAPER, pts)
         pygame.draw.polygon(screen, INK, pts, 2)
-        if self.wind:  # mast, and the sail bellying downwind while the button is held
+        if self.wind:  # mast, boom along the sail's direction, sail filled while held
             mid = self.to_screen((x, y))
+            a = race.sail
+            w = np.array([math.cos(a), math.sin(a)])
+            n = np.array([-w[1], w[0]])
+            o = np.array([x, y])
             if race.u:
-                a = self.p.wind_angle(self.display_time())
-                w = np.array([math.cos(a), math.sin(a)])
-                n = np.array([-w[1], w[0]])
-                o = np.array([x, y])
-                sail = [o + 0.34 * n, o + 0.28 * w, o - 0.34 * n]
+                sail = [o + 0.36 * n, o + 0.45 * w, o - 0.36 * n]
                 pygame.draw.polygon(screen, PAPER, [self.to_screen(q) for q in sail])
                 pygame.draw.lines(screen, BLUE, True, [self.to_screen(q) for q in sail], 3)
+            pygame.draw.line(screen, BLUE, mid, self.to_screen(o + 0.45 * w), 3)
             pygame.draw.circle(screen, INK, mid, 4)
             if race.stop_timer > 0:
                 pygame.draw.circle(screen, RED, mid, round(0.6 * SCALE), 1)
@@ -538,9 +540,12 @@ class Viewer:
 
     def aim_angle(self, t: float) -> float:
         """Angle of the dot. Magnet boat: the heading that a press made at time t (held half
-        a beat) settles on. Wind boat: the direction the wind blows towards at time t."""
+        a beat) settles on. Wind boat: the course that a hold centred on time t gives, that
+        is the wind direction turned by the measured offset h0 (zero without vane). Timing
+        by the sail itself fails: the raised sail races after the wind and crosses the
+        green too fast (duty 0.35, course 31 deg off; docs/phase2_report.md)."""
         if self.wind:
-            return self.p.wind_angle(t)
+            return self.p.wind_angle(t) + self.h0
         return self.h0 - self.p.omega * t - 0.5 * math.pi
 
     def mean_velocity(self) -> np.ndarray:
@@ -550,9 +555,9 @@ class Viewer:
         return np.mean(vs, axis=0) if vs else np.zeros(2)
 
     def draw_wind_ring(self, screen, t: float) -> None:
-        """Wind boat in a race: ring with the wind dot, the push of the last beat as an
-        arrow and, on courses that ask for the ring, a green half towards the next gate
-        (hold the sail up while the dot is there)."""
+        """Wind boat in a race: ring with the aim dot (it goes round with the wind), the push
+        of the last beat as an arrow and, on courses that ask for the ring, a green half
+        towards the next gate (hold the sail up while the dot is there)."""
         race = self.race
         pos = race.pos
 
@@ -619,7 +624,7 @@ class Viewer:
         self.text(screen, info, (680, 22))
         x0 = PANEL_X
         self.text(screen, self.boat.name, (x0, 22))
-        label = "wind" if self.wind else "aim"
+        label = "aim"
         self.text(screen, label, (DIAL_C[0] - 14, DIAL_C[1] - DIAL_R - 24), self.small)
         # steadiness: change of the beat-averaged heading from the previous beat to the
         # last one (the hull also swings within each beat; that wobble is shown as a number)

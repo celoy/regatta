@@ -154,6 +154,40 @@ No collisions up to 120 ms. For comparison, the magnet pilot at 120 ms is 1.5 to
 
 **Tests:** 14 new (40 pass): the two formulas, a T01 run with replay, the wind drill passing with ideal holds and not passing when idle or held.
 
+## Wind boat with more inertia (2026-11-20, after Chris preferred the wind boat)
+
+Chris asked for more inertia in the boat's speed and in the sail's rotation, and chose the sail as a vane with inertia.
+
+**Hull.** tau from 0.5 to 1.0 s (omega tau = 4.7): the path is smoother and a new course takes about a beat to set in.
+
+**Sail as a vane** (`wind.py`; `vane_ratio`, `vane_zeta`, `vane_coast` in `toy/params/wind.toml`; `vane_ratio = 0` gives back the isotropic sail). The sail angle theta_s has inertia. Up: theta_s'' = omega_v² sin(theta_w − theta_s) − 2 zeta_v omega_v theta_s'. Furled: it coasts, theta_s'' = −theta_s'/tau_f. The push is along the sail, times cos₊(theta_w − theta_s).
+
+- **Sail left up:** trails the wind by delta with sin(delta) = 2 zeta_v omega / omega_v. Checked to 10⁻⁴ rad, and the circle radius to 10⁻³.
+- **Symmetry:** for periodic holds the course turns degree for degree with the hold phase, at a constant offset from the wind at the middle of the hold. Checked at four directions.
+- **A soft vane misbehaves.** For omega_v ≤ 2 omega, some settings never settle to one state per beat (the mean velocity changes from beat to beat by up to 100° in direction), and the push drops to 30–70 % of the isotropic value. For omega_v ≥ 2.5 omega with a coasting time of 3 s or more, every case tried (duty cycle 0.3 to 0.7) is periodic.
+- **Default:** omega_v = 2.5 omega, zeta_v = 0.5, tau_f = 3 s. Lag 24°; perfect half-beat holds keep 82 % of the push (v_max raised from 3.53 to 4.31 to keep 1.125 units/s); the course lies 20.0° to the left of the wind at the middle of the hold. At duty cycle 0.3 the speed falls to about half.
+
+**What the player times against.** Measured in the model with feedback rules:
+
+| Rule | Course error | Speed | Duty cycle |
+|---|---|---|---|
+| Hold while the wind is within 90° of the target | 20° left | 100 % | 0.50 |
+| Same, reference turned by the 20° offset | 0° | 100 % | 0.50 |
+| Hold while the sail is within 90° of the target | 31° right | 66 % | 0.35 |
+
+Timing by the sail fails: once raised it races after the wind and crosses the green too fast. So the dot on the ring is the wind direction turned by the measured offset (`hold_response`), which is the course a hold centred now would give, and the player's rule is unchanged. The sail is drawn on the boat (boom always, filled while held) and swings visibly.
+
+**Scripted player with the vane** (same rule and errors as above, 2 seeds; s):
+
+| Timing error | T01 | T02 | T03 |
+|---|---|---|---|
+| 40 ms | 16.1, 15.5 | 25.0, 23.0 | 29.5, 31.7 |
+| 80 ms | 15.3, 15.6 | 25.1, 26.1 | 30.9, 30.6 |
+| 120 ms | 17.7, 17.7 | 26.5, 30.3 | 31.7, 32.7 |
+| 200 ms | 17.5, 17.8 | 29.7, 35.0 | 36.5, 39.1 |
+
+Against the lighter boat: T02 is 10–15 % slower (wider turns) and the cost of 120 ms rises from about 8 % to 10–20 % on T02. It passes the tutorial at beats 5, 10, 15. 42 tests pass (16 for the wind boat).
+
 ## Gate B, for Chris
 
 1. Play T01 to T03 with both boats.
