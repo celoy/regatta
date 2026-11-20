@@ -8,7 +8,7 @@ The toy is playable and the bots race the three test courses.
 
 - **What passes.** Three of the four fun hypotheses pass: the jitter skill gradient, the 3-beat half-beat turn, and race times that grow with timing jitter.
 - **What fails.** The naive bot is not slower in the way the hypothesis means. When it finishes it is as fast as the pilot. When it loses, it is because it orbits a gate it has just missed.
-- **What is left for Chris.** Gate B: play the toy and judge whether steering by phase feels right, especially with the aim dial.
+- **Outcome.** Chris played the toy on 2026-11-20, then a wind boat built for comparison, and stopped the project. The later sections are in date order; the outcome is at the end.
 
 ## Run it
 
@@ -188,7 +188,7 @@ Timing by the sail fails: once raised it races after the wind and crosses the gr
 
 Against the lighter boat: T02 is 10–15 % slower (wider turns) and the cost of 120 ms rises from about 8 % to 10–20 % on T02. It passes the tutorial at beats 5, 10, 15. 42 tests pass (16 for the wind boat).
 
-## Gate B, for Chris
+## Gate B, for Chris (as written on 2026-11-19; superseded by the outcome below)
 
 1. Play T01 to T03 with both boats.
 2. Judge:
@@ -197,3 +197,13 @@ Against the lighter boat: T02 is 10–15 % slower (wider turns) and the cost of 
    - whether the aim dial makes it too easy or is needed;
    - whether the 40° in-beat wobble reads as charm or noise.
 3. If it does not feel right, the first knobs are omega_over_omega0 (2 to 3: steadier but slower), alpha0_deg and hull_damping, in the boat files. L reloads them without restarting.
+
+## Outcome (2026-11-20)
+
+Gate B was not held as planned. Chris played the toy on 20 November and stopped the project the same day.
+
+- **Magnet boat:** hard to control and not clearly fun. His first run of T01 took 92.5 s against a par of 10.8 s; a slower beat and the moored-boat tutorial did not change his judgement ("Not easy... Not sure it is really fun").
+- **Wind boat:** he liked it much better at first, asked for more inertia, and after playing that version found it "not that interesting actually".
+- **Decision:** no Godot game and no jam submission. The repository is archived.
+
+Not built: bots and par times for the wind boat, audio (a tick on the beat was proposed twice and never tried, so its effect on keeping the rhythm is unknown), the Godot port, the campaign courses.

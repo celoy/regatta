@@ -13,7 +13,7 @@ Working title "Magnet Regatta" (not cleared, see Open questions). This file is t
 
 ## Status
 
-- CURRENT: Phase 2
+- CURRENT: none (project stopped 2026-11-20, repository archived)
 - 2026-11-17: brief written; nothing built yet.
 - 2026-11-19: Phase 0 done: public repo celoy/regatta, layout, .venv (Python 3.12, uv), pytest smoke test passing, empty Godot 4.7.2 project exported to web (no threads) and loaded in headless Chrome. Awaiting Chris's go for Phase 1.
 - 2026-11-19: Phase 1 built: model, tests 1-5 (10 pass), sweeps 1-5 plus a design scan, report in docs/phase1_report.md. Findings: defaults give no lock; still tiller spins with the field (not chaotic); duty cycle does not steer (two opposite headings only). Awaiting Chris's review, the steering decision and the parameter set for Phase 2.
@@ -24,6 +24,7 @@ Working title "Magnet Regatta" (not cleared, see Open questions). This file is t
 - 2026-11-20: after Chris played (T01 in 92 s at 1 Hz, rhythm not held): beat slowed to 0.75 Hz by time rescaling (toy/params/game.toml; new pars 14.44, 29.97, 30.18 s); moored-boat tutorial added (courses/TUT.json, model drill.py: green/red ring, stages straight, left, right). 26 tests pass. Awaiting Gate B on the new version.
 - 2026-11-20: Chris found the magnet boat hard and not clearly fun; wind-boat prototype added to the toy for comparison (key M; model/regatta_model/wind.py, toy/params/wind.toml, courses/TUT_wind.json): rotating wind, sail up while pressed, mean velocity along the wind at the middle of the hold. A scripted player loses about 8 % at 120 ms of timing error (magnet pilot: 50 to 90 %). 40 tests pass. No Decisions changed. Awaiting Gate B: Chris compares the two boats.
 - 2026-11-20: Chris prefers the wind boat and asked for more inertia: hull tau 0.5 to 1.0 s; sail as a vane with inertia (omega_v = 2.5 omega, zeta_v = 0.5, coast 3 s; lag 24°, 82 % of the push, course 20° left of the wind at mid-hold, aim dot calibrated). Softer vanes (omega_v ≤ 2 omega) can be irregular; timing by the sail itself fails. 42 tests pass. Decisions not yet rewritten for the wind boat: awaiting Chris's go.
+- 2026-11-20: Chris played the heavier wind boat and found it not interesting enough; project stopped. README written, outcome added to docs/phase2_report.md, final state tagged final-2026-11-20, repository archived on GitHub. 42 tests pass.
 
 ## Deadline and jam
 
@@ -230,6 +231,7 @@ Cut list, in this order: field-drift ponds; resonant boat; best-run ghost; Audio
 - One boat on the water at a time; constant boat speed; the field orients and never pushes.
 - Boats differ by tiller spring, magnet and inertia; the first boat is stiff and crisp (default, open to change).
 - Python twin first (model, tests, sweeps, bots), then GDScript port checked against golden files.
+- Project stopped on 2026-11-20 after playing the toy (Chris's decision): neither the magnet boat nor the wind-boat prototype was fun enough. No Godot game built, no jam submission. The entries above describe the magnet game as planned; the wind boat stayed a prototype (docs/phase2_report.md).
 
 ## Open questions (as tasks)
 
